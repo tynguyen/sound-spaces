@@ -25,7 +25,7 @@ If you use the SoundSpaces platform in your research, please cite the following 
 }
 ```
 
-## Installation 
+## Installation
 1. Install [habitat-lab v0.1.7](https://github.com/facebookresearch/habitat-lab) and [habitat-sim v0.1.7](https://github.com/facebookresearch/habitat-sim)
 2. Install this repo into pip by running the following command:
 ```
@@ -33,12 +33,25 @@ pip install -e .
 ```
 3. Following instructions on the [dataset](soundspaces/README.md) page to download the rendered audio data and datasets
 
+
+## Debug
+### Error 1
+“ImportError: /usr/lib/x86_64-linux-gnu/libstdc++.so.6: version `GLIBCXX_3.4.26'”.
+
+Solution:
+```
+sudo apt-get install software-properties-common sudo add-apt-repository ppa:ubuntu-toolchain-r/test sudo apt-get update sudo apt-get install gcc-4.9 sudo apt-get upgrade libstdc++6
+You can check if you get GLIBCXX desired version like this:
+strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX
+```
+
+
 ## Usage
 This repo supports benchmarking PointGoal, AudioGoal and AudioPointGoal on Replica and Matterport3D datasets.
-We provide several baselines including a mapless end-to-end RL agent and a hierarchical model.  
+We provide several baselines including a mapless end-to-end RL agent and a hierarchical model.
 
-Below we show the commands for training and evaluating AudioGoal with Depth sensor on Replica, 
-but it applies to the other two tasks, other sensors and Matterport dataset as well. 
+Below we show the commands for training and evaluating AudioGoal with Depth sensor on Replica,
+but it applies to the other two tasks, other sensors and Matterport dataset as well.
 1. Training
 ```
 python ss_baselines/av_nav/run.py --exp-config ss_baselines/av_nav/config/audionav/replica/train_telephone/audiogoal_depth.yaml --model-dir data/models/replica/audiogoal_depth
@@ -61,10 +74,10 @@ python scripts/interactive_demo.py
 ```
 
 ## Data
-We provide acoustically realistic audio renderings for Replica and Matterport3D datasets. 
-The audio renderings exist in the form of pre-rendered room impulse responses (RIR), which allows 
-users to convolve with any source sounds they wish during training. 
-See [dataset](soundspaces/README.md) for more details.  
+We provide acoustically realistic audio renderings for Replica and Matterport3D datasets.
+The audio renderings exist in the form of pre-rendered room impulse responses (RIR), which allows
+users to convolve with any source sounds they wish during training.
+See [dataset](soundspaces/README.md) for more details.
 Note that we do not open source the rendering code at this time.
 
 
