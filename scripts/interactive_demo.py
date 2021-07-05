@@ -67,15 +67,19 @@ def interactive_demo(config, env):
                         action = None
                         if event.key == pygame.K_w:  # w
                             action = HabitatSimActions.MOVE_FORWARD
+                            print(f"[Info] Pressed w -> move forward")
                             keys.append("w")
                         elif event.key == pygame.K_a:  # a
                             action = HabitatSimActions.TURN_LEFT
+                            print(f"[Info] Pressed a -> turn left")
                             keys.append("a")
                         elif event.key == pygame.K_d:  # d
                             action = HabitatSimActions.TURN_RIGHT
+                            print(f"[Info] Pressed d -> turn right")
                             keys.append("d")
                         elif event.key == pygame.K_f:  # f
                             action = HabitatSimActions.STOP
+                            print(f"[Info] Pressed f -> stop")
                             keys.append("f")
                         if action is not None:
                             return action
@@ -135,6 +139,8 @@ def interactive_demo(config, env):
         if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE
         else 1
     )
+
+    breakpoint()
     images_to_video_with_audio(
         frames,
         video_dir,
@@ -177,7 +183,7 @@ def following(config, env, keys):
         audios.append(audio)
 
     env.close()
-
+    breakpoint()
     # write frames and audio into videos
     video_dir = "data/visualizations/demo"
     video_name = "demo"
@@ -240,7 +246,7 @@ def main():
         format="%(asctime)s, %(levelname)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    breakpoint()
+
     config = get_config(
         config_paths=args.exp_config, opts=args.opts, run_type=args.run_type
     )

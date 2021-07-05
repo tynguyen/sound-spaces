@@ -39,7 +39,7 @@ TASK:
 
 DATASET:
   TYPE: "AudioNav"
-  SPLIT: "val_telephone"
+  SPLIT: "train_telephone"
   CONTENT_SCENES: ["*"]
   VERSION: 'v1'
   SCENES_DIR: "data/scene_datasets/replica"
