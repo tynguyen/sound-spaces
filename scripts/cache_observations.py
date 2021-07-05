@@ -79,11 +79,12 @@ def main(dataset):
             )
 
         for node in graph.nodes():
-            agent_position = graph.nodes()[node]["point"]
+            agent_position = graph.nodes()[node]["point"]  # (3,)
+            print(f"[Info] Agent pos: {agent_position}")
             for angle in [0, 90, 180, 270]:
                 agent_rotation = quat_to_coeffs(
                     quat_from_angle_axis(np.deg2rad(angle), np.array([0, 1, 0]))
-                ).tolist()
+                ).tolist()  # [b, c, d, a] where the unit quaternion would be a + bi + cj + dk
                 goal_radius = 0.00001
                 goal = NavigationGoal(position=agent_position, radius=goal_radius)
                 episode = NavigationEpisode(
@@ -95,6 +96,7 @@ def main(dataset):
                     info={"sound": "telephone"},
                 )
 
+                # Simulation configs including RGB sensor, depth sensor ...
                 episode_sim_config = merge_sim_episode_config(
                     config.TASK_CONFIG.SIMULATOR, episode
                 )

@@ -22,7 +22,11 @@ from gym import spaces
 
 from habitat.core.registry import registry
 import habitat_sim
-from habitat_sim.utils.common import quat_from_angle_axis, quat_from_coeffs, quat_to_angle_axis
+from habitat_sim.utils.common import (
+    quat_from_angle_axis,
+    quat_from_coeffs,
+    quat_to_angle_axis,
+)
 from habitat.sims.habitat_simulator.actions import HabitatSimActions
 from habitat.core.simulator import (
     AgentState,
@@ -61,6 +65,7 @@ class DummySimulator:
     """
     Dummy simulator for avoiding loading the scene meshes when using cached observations.
     """
+
     def __init__(self):
         self.position = None
         self.rotation = None
@@ -101,8 +106,9 @@ class SoundSpacesSim(Simulator, ABC):
         config: configuration for initializing the simulator.
     """
 
-    def action_space_shortest_path(self, source: AgentState, targets: List[AgentState], agent_id: int = 0) -> List[
-            ShortestPathPoint]:
+    def action_space_shortest_path(
+        self, source: AgentState, targets: List[AgentState], agent_id: int = 0
+    ) -> List[ShortestPathPoint]:
         pass
 
     def __init__(self, config: Config) -> None:
@@ -153,7 +159,9 @@ class SoundSpacesSim(Simulator, ABC):
 
         self.points, self.graph = load_metadata(self.metadata_dir)
         for node in self.graph.nodes():
-            self._position_to_index_mapping[self.position_encoding(self.graph.nodes()[node]['point'])] = node
+            self._position_to_index_mapping[
+                self.position_encoding(self.graph.nodes()[node]["point"])
+            ] = node
 
         if self.config.AUDIO.HAS_DISTRACTOR_SOUND:
             self._distractor_position_index = None
@@ -161,41 +169,31 @@ class SoundSpacesSim(Simulator, ABC):
 
         if self.config.USE_RENDERED_OBSERVATIONS:
             self._sim = DummySimulator()
-            with open(self.current_scene_observation_file, 'rb') as fo:
+            with open(self.current_scene_observation_file, "rb") as fo:
                 self._frame_cache = pickle.load(fo)
         else:
             self._sim = habitat_sim.Simulator(config=self.sim_config)
 
     def create_sim_config(
-            self, _sensor_suite: SensorSuite
+        self, _sensor_suite: SensorSuite
     ) -> habitat_sim.Configuration:
         sim_config = habitat_sim.SimulatorConfiguration()
-        overwrite_config(
-            config_from=self.config.HABITAT_SIM_V0, config_to=sim_config
-        )
+        overwrite_config(config_from=self.config.HABITAT_SIM_V0, config_to=sim_config)
         sim_config.scene_id = self.config.SCENE
         agent_config = habitat_sim.AgentConfiguration()
-        overwrite_config(
-            config_from=self.get_agent_config(), config_to=agent_config
-        )
+        overwrite_config(config_from=self.get_agent_config(), config_to=agent_config)
 
         sensor_specifications = []
         for sensor in _sensor_suite.sensors.values():
             sim_sensor_cfg = habitat_sim.SensorSpec()
-            overwrite_config(
-                config_from=sensor.config, config_to=sim_sensor_cfg
-            )
+            overwrite_config(config_from=sensor.config, config_to=sim_sensor_cfg)
             sim_sensor_cfg.uuid = sensor.uuid
-            sim_sensor_cfg.resolution = list(
-                sensor.observation_space.shape[:2]
-            )
+            sim_sensor_cfg.resolution = list(sensor.observation_space.shape[:2])
             sim_sensor_cfg.parameters["hfov"] = str(sensor.config.HFOV)
 
             # accessing child attributes through parent interface
             sim_sensor_cfg.sensor_type = sensor.sim_sensor_type  # type: ignore
-            sim_sensor_cfg.gpu2gpu_transfer = (
-                self.config.HABITAT_SIM_V0.GPU_GPU
-            )
+            sim_sensor_cfg.gpu2gpu_transfer = self.config.HABITAT_SIM_V0.GPU_GPU
             sensor_specifications.append(sim_sensor_cfg)
 
         agent_config.sensor_specifications = sensor_specifications
@@ -222,9 +220,7 @@ class SoundSpacesSim(Simulator, ABC):
             agent_cfg = self._get_agent_config(agent_id)
             if agent_cfg.IS_SET_START_STATE:
                 self.set_agent_state(
-                    agent_cfg.START_POSITION,
-                    agent_cfg.START_ROTATION,
-                    agent_id,
+                    agent_cfg.START_POSITION, agent_cfg.START_ROTATION, agent_id,
                 )
                 is_updated = True
 
@@ -269,7 +265,11 @@ class SoundSpacesSim(Simulator, ABC):
 
     @property
     def binaural_rir_dir(self):
-        return os.path.join(self.config.AUDIO.BINAURAL_RIR_DIR, self.config.SCENE_DATASET, self.current_scene_name)
+        return os.path.join(
+            self.config.AUDIO.BINAURAL_RIR_DIR,
+            self.config.SCENE_DATASET,
+            self.current_scene_name,
+        )
 
     @property
     def source_sound_dir(self):
@@ -281,17 +281,24 @@ class SoundSpacesSim(Simulator, ABC):
 
     @property
     def metadata_dir(self):
-        return os.path.join(self.config.AUDIO.METADATA_DIR, self.config.SCENE_DATASET, self.current_scene_name)
+        return os.path.join(
+            self.config.AUDIO.METADATA_DIR,
+            self.config.SCENE_DATASET,
+            self.current_scene_name,
+        )
 
     @property
     def current_scene_name(self):
         # config.SCENE (_current_scene) looks like 'data/scene_datasets/replica/office_1/habitat/mesh_semantic.ply'
-        return self._current_scene.split('/')[3]
+        return self._current_scene.split("/")[3]
 
     @property
     def current_scene_observation_file(self):
-        return os.path.join(self.config.SCENE_OBSERVATION_DIR, self.config.SCENE_DATASET,
-                            self.current_scene_name + '.pkl')
+        return os.path.join(
+            self.config.SCENE_OBSERVATION_DIR,
+            self.config.SCENE_DATASET,
+            self.current_scene_name + ".pkl",
+        )
 
     @property
     def current_source_sound(self):
@@ -310,29 +317,37 @@ class SoundSpacesSim(Simulator, ABC):
 
     def reconfigure(self, config: Config) -> None:
         self.config = config
-        if hasattr(self.config.AGENT_0, 'OFFSET'):
+        if hasattr(self.config.AGENT_0, "OFFSET"):
             self._offset = int(self.config.AGENT_0.OFFSET)
         else:
             self._offset = 0
         if self.config.AUDIO.EVERLASTING:
             self._duration = 500
         else:
-            assert hasattr(self.config.AGENT_0, 'DURATION')
+            assert hasattr(self.config.AGENT_0, "DURATION")
             self._duration = int(self.config.AGENT_0.DURATION)
         self._audio_index = 0
         is_same_sound = config.AGENT_0.SOUND_ID == self._current_sound
         if not is_same_sound:
             self._current_sound = self.config.AGENT_0.SOUND_ID
             self._load_single_source_sound()
-            logging.debug("Switch to sound {} with duration {} seconds".format(self._current_sound, self._duration))
+            logging.debug(
+                "Switch to sound {} with duration {} seconds".format(
+                    self._current_sound, self._duration
+                )
+            )
 
         is_same_scene = config.SCENE == self._current_scene
         if not is_same_scene:
             self._current_scene = config.SCENE
-            logging.debug('Current scene: {} and sound: {}'.format(self.current_scene_name, self._current_sound))
+            logging.debug(
+                "Current scene: {} and sound: {}".format(
+                    self.current_scene_name, self._current_sound
+                )
+            )
 
             if self.config.USE_RENDERED_OBSERVATIONS:
-                with open(self.current_scene_observation_file, 'rb') as fo:
+                with open(self.current_scene_observation_file, "rb") as fo:
                     self._frame_cache = pickle.load(fo)
             else:
                 self._sim.close()
@@ -341,11 +356,13 @@ class SoundSpacesSim(Simulator, ABC):
                 self._sim = habitat_sim.Simulator(self.sim_config)
                 self._update_agents_state()
                 self._frame_cache = dict()
-            logging.debug('Loaded scene {}'.format(self.current_scene_name))
+            logging.debug("Loaded scene {}".format(self.current_scene_name))
 
             self.points, self.graph = load_metadata(self.metadata_dir)
             for node in self.graph.nodes():
-                self._position_to_index_mapping[self.position_encoding(self.graph.nodes()[node]['point'])] = node
+                self._position_to_index_mapping[
+                    self.position_encoding(self.graph.nodes()[node]["point"])
+                ] = node
             self._instance2label_mapping = None
 
         if not is_same_scene or not is_same_sound:
@@ -355,45 +372,77 @@ class SoundSpacesSim(Simulator, ABC):
         self._episode_step_count = 0
 
         # set agent positions
-        self._receiver_position_index = self._position_to_index(self.config.AGENT_0.START_POSITION)
-        self._source_position_index = self._position_to_index(self.config.AGENT_0.GOAL_POSITION)
+        self._receiver_position_index = self._position_to_index(
+            self.config.AGENT_0.START_POSITION
+        )
+        self._source_position_index = self._position_to_index(
+            self.config.AGENT_0.GOAL_POSITION
+        )
         # the agent rotates about +Y starting from -Z counterclockwise,
         # so rotation angle 90 means the agent rotate about +Y 90 degrees
-        self._rotation_angle = int(np.around(np.rad2deg(quat_to_angle_axis(quat_from_coeffs(
-                             self.config.AGENT_0.START_ROTATION))[0]))) % 360
+        self._rotation_angle = (
+            int(
+                np.around(
+                    np.rad2deg(
+                        quat_to_angle_axis(
+                            quat_from_coeffs(self.config.AGENT_0.START_ROTATION)
+                        )[0]
+                    )
+                )
+            )
+            % 360
+        )
         if self.config.USE_RENDERED_OBSERVATIONS:
-            self._sim.set_agent_state(list(self.graph.nodes[self._receiver_position_index]['point']),
-                                      quat_from_coeffs(self.config.AGENT_0.START_ROTATION))
+            self._sim.set_agent_state(
+                list(self.graph.nodes[self._receiver_position_index]["point"]),
+                quat_from_coeffs(self.config.AGENT_0.START_ROTATION),
+            )
         else:
-            self.set_agent_state(list(self.graph.nodes[self._receiver_position_index]['point']),
-                                 self.config.AGENT_0.START_ROTATION)
+            self.set_agent_state(
+                list(self.graph.nodes[self._receiver_position_index]["point"]),
+                self.config.AGENT_0.START_ROTATION,
+            )
 
         if self.config.AUDIO.HAS_DISTRACTOR_SOUND:
-            self._distractor_position_index = self.config.AGENT_0.DISTRACTOR_POSITION_INDEX
+            self._distractor_position_index = (
+                self.config.AGENT_0.DISTRACTOR_POSITION_INDEX
+            )
             self._current_distractor_sound = self.config.AGENT_0.DISTRACTOR_SOUND_ID
             self._load_single_distractor_sound()
 
         if self._use_oracle_planner:
             self._oracle_actions = self.compute_oracle_actions()
 
-        logging.debug("Initial source, agent at: {}, {}, orientation: {}".
-                      format(self._source_position_index, self._receiver_position_index, self.get_orientation()))
+        logging.debug(
+            "Initial source, agent at: {}, {}, orientation: {}".format(
+                self._source_position_index,
+                self._receiver_position_index,
+                self.get_orientation(),
+            )
+        )
 
     def compute_semantic_index_mapping(self):
         # obtain mapping from instance id to semantic label id
         if isinstance(self._sim, DummySimulator):
             if self._current_scene not in self._house_readers:
-                self._house_readers[self._current_sound] = HouseReader(self._current_scene.replace('.glb', '.house'))
+                self._house_readers[self._current_sound] = HouseReader(
+                    self._current_scene.replace(".glb", ".house")
+                )
             reader = self._house_readers[self._current_sound]
             instance_id_to_label_id = reader.compute_object_to_category_index_mapping()
         else:
             scene = self.semantic_annotations()
-            instance_id_to_label_id = {int(obj.id.split("_")[-1]): obj.category.index() for obj in scene.objects}
-        self._instance2label_mapping = np.array([instance_id_to_label_id[i] for i in range(len(instance_id_to_label_id))])
+            instance_id_to_label_id = {
+                int(obj.id.split("_")[-1]): obj.category.index()
+                for obj in scene.objects
+            }
+        self._instance2label_mapping = np.array(
+            [instance_id_to_label_id[i] for i in range(len(instance_id_to_label_id))]
+        )
 
     @staticmethod
     def position_encoding(position):
-        return '{:.2f}_{:.2f}_{:.2f}'.format(*position)
+        return "{:.2f}_{:.2f}_{:.2f}".format(*position)
 
     def _position_to_index(self, position):
         if self.position_encoding(position) in self._position_to_index_mapping:
@@ -414,7 +463,7 @@ class SoundSpacesSim(Simulator, ABC):
             return sim_obs
 
     def reset(self):
-        logging.debug('Reset simulation')
+        logging.debug("Reset simulation")
         if self.config.USE_RENDERED_OBSERVATIONS:
             sim_obs = self._get_sim_observation()
             self._sim.set_sensor_observations(sim_obs)
@@ -458,9 +507,16 @@ class SoundSpacesSim(Simulator, ABC):
                 # the agent initially faces -Z by default
                 self._previous_step_collided = True
                 for neighbor in self.graph[self._receiver_position_index]:
-                    p1 = self.graph.nodes[self._receiver_position_index]['point']
-                    p2 = self.graph.nodes[neighbor]['point']
-                    direction = int(np.around(np.rad2deg(np.arctan2(p2[2] - p1[2], p2[0] - p1[0])))) % 360
+                    p1 = self.graph.nodes[self._receiver_position_index]["point"]
+                    p2 = self.graph.nodes[neighbor]["point"]
+                    direction = (
+                        int(
+                            np.around(
+                                np.rad2deg(np.arctan2(p2[2] - p1[2], p2[0] - p1[0]))
+                            )
+                        )
+                        % 360
+                    )
                     if direction == self.get_orientation():
                         self._receiver_position_index = neighbor
                         self._previous_step_collided = False
@@ -475,12 +531,22 @@ class SoundSpacesSim(Simulator, ABC):
                 intermediate_observations = list()
                 fps = self.config.VIEW_CHANGE_FPS
                 if action == HabitatSimActions.MOVE_FORWARD:
-                    prev_position = np.array(self.graph.nodes[prev_position_index]['point'])
-                    current_position = np.array(self.graph.nodes[self._receiver_position_index]['point'])
+                    prev_position = np.array(
+                        self.graph.nodes[prev_position_index]["point"]
+                    )
+                    current_position = np.array(
+                        self.graph.nodes[self._receiver_position_index]["point"]
+                    )
                     for i in range(1, fps):
-                        intermediate_position = prev_position + i / fps * (current_position - prev_position)
-                        self.set_agent_state(intermediate_position.tolist(), quat_from_angle_axis(np.deg2rad(
-                                            self._rotation_angle), np.array([0, 1, 0])))
+                        intermediate_position = prev_position + i / fps * (
+                            current_position - prev_position
+                        )
+                        self.set_agent_state(
+                            intermediate_position.tolist(),
+                            quat_from_angle_axis(
+                                np.deg2rad(self._rotation_angle), np.array([0, 1, 0])
+                            ),
+                        )
                         sim_obs = self._sim.get_sensor_observations()
                         observations = self._sensor_suite.get_observations(sim_obs)
                         intermediate_observations.append(observations)
@@ -490,21 +556,36 @@ class SoundSpacesSim(Simulator, ABC):
                             intermediate_rotation = prev_rotation_angle + i / fps * 90
                         elif action == HabitatSimActions.TURN_RIGHT:
                             intermediate_rotation = prev_rotation_angle - i / fps * 90
-                        self.set_agent_state(list(self.graph.nodes[self._receiver_position_index]['point']),
-                                             quat_from_angle_axis(np.deg2rad(intermediate_rotation),
-                                                                  np.array([0, 1, 0])))
+                        self.set_agent_state(
+                            list(
+                                self.graph.nodes[self._receiver_position_index]["point"]
+                            ),
+                            quat_from_angle_axis(
+                                np.deg2rad(intermediate_rotation), np.array([0, 1, 0])
+                            ),
+                        )
                         sim_obs = self._sim.get_sensor_observations()
                         observations = self._sensor_suite.get_observations(sim_obs)
                         intermediate_observations.append(observations)
 
-            self.set_agent_state(list(self.graph.nodes[self._receiver_position_index]['point']),
-                                 quat_from_angle_axis(np.deg2rad(self._rotation_angle), np.array([0, 1, 0])))
+            self.set_agent_state(
+                list(self.graph.nodes[self._receiver_position_index]["point"]),
+                quat_from_angle_axis(
+                    np.deg2rad(self._rotation_angle), np.array([0, 1, 0])
+                ),
+            )
         self._episode_step_count += 1
 
         # log debugging info
-        logging.debug('After taking action {}, s,r: {}, {}, orientation: {}, location: {}'.format(
-            action, self._source_position_index, self._receiver_position_index,
-            self.get_orientation(), self.graph.nodes[self._receiver_position_index]['point']))
+        logging.debug(
+            "After taking action {}, s,r: {}, {}, orientation: {}, location: {}".format(
+                action,
+                self._source_position_index,
+                self._receiver_position_index,
+                self.get_orientation(),
+                self.graph.nodes[self._receiver_position_index]["point"],
+            )
+        )
 
         sim_obs = self._get_sim_observation()
         if self.config.USE_RENDERED_OBSERVATIONS:
@@ -512,7 +593,7 @@ class SoundSpacesSim(Simulator, ABC):
         self._prev_sim_obs = sim_obs
         observations = self._sensor_suite.get_observations(sim_obs)
         if self.config.CONTINUOUS_VIEW_CHANGE:
-            observations['intermediate'] = intermediate_observations
+            observations["intermediate"] = intermediate_observations
 
         return observations
 
@@ -539,39 +620,55 @@ class SoundSpacesSim(Simulator, ABC):
         # load all mono files at once
         sound_files = os.listdir(self.source_sound_dir)
         for sound_file in sound_files:
-            sound = sound_file.split('.')[0]
-            audio_data, sr = librosa.load(os.path.join(self.source_sound_dir, sound),
-                                          sr=self.config.AUDIO.RIR_SAMPLING_RATE)
+            sound = sound_file.split(".")[0]
+            audio_data, sr = librosa.load(
+                os.path.join(self.source_sound_dir, sound),
+                sr=self.config.AUDIO.RIR_SAMPLING_RATE,
+            )
             self._source_sound_dict[sound] = audio_data
-            self._audio_length = audio_data.shape[0] // self.config.AUDIO.RIR_SAMPLING_RATE
+            self._audio_length = (
+                audio_data.shape[0] // self.config.AUDIO.RIR_SAMPLING_RATE
+            )
 
     def _load_single_distractor_sound(self):
         if self._current_distractor_sound not in self._source_sound_dict:
-            audio_data, sr = librosa.load(os.path.join(self.distractor_sound_dir, self._current_distractor_sound),
-                                          sr=self.config.AUDIO.RIR_SAMPLING_RATE)
+            audio_data, sr = librosa.load(
+                os.path.join(self.distractor_sound_dir, self._current_distractor_sound),
+                sr=self.config.AUDIO.RIR_SAMPLING_RATE,
+            )
             self._source_sound_dict[self._current_distractor_sound] = audio_data
 
     def _load_single_source_sound(self):
         if self._current_sound not in self._source_sound_dict:
-            audio_data, sr = librosa.load(os.path.join(self.source_sound_dir, self._current_sound),
-                                          sr=self.config.AUDIO.RIR_SAMPLING_RATE)
+            audio_data, sr = librosa.load(
+                os.path.join(self.source_sound_dir, self._current_sound),
+                sr=self.config.AUDIO.RIR_SAMPLING_RATE,
+            )
             self._source_sound_dict[self._current_sound] = audio_data
-        self._audio_length = self._source_sound_dict[self._current_sound].shape[0]//self.config.AUDIO.RIR_SAMPLING_RATE
+        self._audio_length = (
+            self._source_sound_dict[self._current_sound].shape[0]
+            // self.config.AUDIO.RIR_SAMPLING_RATE
+        )
 
     def _compute_euclidean_distance_between_sr_locations(self):
-        p1 = self.graph.nodes[self._receiver_position_index]['point']
-        p2 = self.graph.nodes[self._source_position_index]['point']
-        d = np.sqrt((p1[0] - p2[0])**2 + (p1[2] - p2[2])**2)
+        p1 = self.graph.nodes[self._receiver_position_index]["point"]
+        p2 = self.graph.nodes[self._source_position_index]["point"]
+        d = np.sqrt((p1[0] - p2[0]) ** 2 + (p1[2] - p2[2]) ** 2)
         return d
 
     def _compute_audiogoal(self):
         sampling_rate = self.config.AUDIO.RIR_SAMPLING_RATE
         if self._episode_step_count > self._duration:
-            logging.debug('Step count is greater than duration. Empty spectrogram.')
+            logging.debug("Step count is greater than duration. Empty spectrogram.")
             audiogoal = np.zeros((2, sampling_rate))
         else:
-            binaural_rir_file = os.path.join(self.binaural_rir_dir, str(self.azimuth_angle), '{}_{}.wav'.format(
-                self._receiver_position_index, self._source_position_index))
+            binaural_rir_file = os.path.join(
+                self.binaural_rir_dir,
+                str(self.azimuth_angle),
+                "{}_{}.wav".format(
+                    self._receiver_position_index, self._source_position_index
+                ),
+            )
             try:
                 sampling_freq, binaural_rir = wavfile.read(binaural_rir_file)  # float32
             except ValueError:
@@ -583,40 +680,76 @@ class SoundSpacesSim(Simulator, ABC):
 
             # by default, convolve in full mode, which preserves the direct sound
             if self.current_source_sound.shape[0] == sampling_rate:
-                binaural_convolved = np.array([fftconvolve(self.current_source_sound, binaural_rir[:, channel]
-                                                           ) for channel in range(binaural_rir.shape[-1])])
+                binaural_convolved = np.array(
+                    [
+                        fftconvolve(self.current_source_sound, binaural_rir[:, channel])
+                        for channel in range(binaural_rir.shape[-1])
+                    ]
+                )
                 audiogoal = binaural_convolved[:, :sampling_rate]
             else:
                 index = self._audio_index
                 self._audio_index = (self._audio_index + 1) % self._audio_length
                 if index * sampling_rate - binaural_rir.shape[0] < 0:
-                    source_sound = self.current_source_sound[: (index + 1) * sampling_rate]
-                    binaural_convolved = np.array([fftconvolve(source_sound, binaural_rir[:, channel]
-                                                               ) for channel in range(binaural_rir.shape[-1])])
-                    audiogoal = binaural_convolved[:, index * sampling_rate: (index + 1) * sampling_rate]
+                    source_sound = self.current_source_sound[
+                        : (index + 1) * sampling_rate
+                    ]
+                    binaural_convolved = np.array(
+                        [
+                            fftconvolve(source_sound, binaural_rir[:, channel])
+                            for channel in range(binaural_rir.shape[-1])
+                        ]
+                    )
+                    audiogoal = binaural_convolved[
+                        :, index * sampling_rate : (index + 1) * sampling_rate
+                    ]
                 else:
                     # include reverb from previous time step
-                    source_sound = self.current_source_sound[index * sampling_rate - binaural_rir.shape[0] + 1
-                                                             : (index + 1) * sampling_rate]
-                    binaural_convolved = np.array([fftconvolve(source_sound, binaural_rir[:, channel], mode='valid',
-                                                               ) for channel in range(binaural_rir.shape[-1])])
+                    source_sound = self.current_source_sound[
+                        index * sampling_rate
+                        - binaural_rir.shape[0]
+                        + 1 : (index + 1) * sampling_rate
+                    ]
+                    binaural_convolved = np.array(
+                        [
+                            fftconvolve(
+                                source_sound, binaural_rir[:, channel], mode="valid",
+                            )
+                            for channel in range(binaural_rir.shape[-1])
+                        ]
+                    )
                     audiogoal = binaural_convolved
 
             if self.config.AUDIO.HAS_DISTRACTOR_SOUND:
-                binaural_rir_file = os.path.join(self.binaural_rir_dir, str(self.azimuth_angle), '{}_{}.wav'.format(
-                    self._receiver_position_index, self._distractor_position_index))
+                binaural_rir_file = os.path.join(
+                    self.binaural_rir_dir,
+                    str(self.azimuth_angle),
+                    "{}_{}.wav".format(
+                        self._receiver_position_index, self._distractor_position_index
+                    ),
+                )
                 try:
                     sampling_freq, distractor_rir = wavfile.read(binaural_rir_file)
                 except ValueError:
                     logging.warning("{} file is not readable".format(binaural_rir_file))
-                    distractor_rir = np.zeros((self.config.AUDIO.RIR_SAMPLING_RATE, 2)).astype(np.float32)
+                    distractor_rir = np.zeros(
+                        (self.config.AUDIO.RIR_SAMPLING_RATE, 2)
+                    ).astype(np.float32)
                 if len(distractor_rir) == 0:
                     logging.debug("Empty RIR file at {}".format(binaural_rir_file))
-                    distractor_rir = np.zeros((self.config.AUDIO.RIR_SAMPLING_RATE, 2)).astype(np.float32)
+                    distractor_rir = np.zeros(
+                        (self.config.AUDIO.RIR_SAMPLING_RATE, 2)
+                    ).astype(np.float32)
 
-                distractor_convolved = np.array([fftconvolve(self._source_sound_dict[self._current_distractor_sound],
-                                                             distractor_rir[:, channel]
-                                                             ) for channel in range(distractor_rir.shape[-1])])
+                distractor_convolved = np.array(
+                    [
+                        fftconvolve(
+                            self._source_sound_dict[self._current_distractor_sound],
+                            distractor_rir[:, channel],
+                        )
+                        for channel in range(distractor_rir.shape[-1])
+                    ]
+                )
                 audiogoal += distractor_convolved[:, :sampling_rate]
 
         return audiogoal
@@ -629,14 +762,20 @@ class SoundSpacesSim(Simulator, ABC):
             return None
 
     def cache_egomap_observation(self, egomap):
-        self._egomap_cache[self._current_scene][(self._receiver_position_index, self._rotation_angle)] = egomap
+        self._egomap_cache[self._current_scene][
+            (self._receiver_position_index, self._rotation_angle)
+        ] = egomap
 
     def get_current_audiogoal_observation(self):
         if self.config.AUDIO.HAS_DISTRACTOR_SOUND:
             # by default, does not cache for distractor sound
             audiogoal = self._compute_audiogoal()
         else:
-            joint_index = (self._source_position_index, self._receiver_position_index, self.azimuth_angle)
+            joint_index = (
+                self._source_position_index,
+                self._receiver_position_index,
+                self.azimuth_angle,
+            )
             if joint_index not in self._audiogoal_cache:
                 self._audiogoal_cache[joint_index] = self._compute_audiogoal()
             audiogoal = self._audiogoal_cache[joint_index]
@@ -648,7 +787,11 @@ class SoundSpacesSim(Simulator, ABC):
             audiogoal = self.get_current_audiogoal_observation()
             spectrogram = audiogoal2spectrogram(audiogoal)
         else:
-            joint_index = (self._source_position_index, self._receiver_position_index, self.azimuth_angle)
+            joint_index = (
+                self._source_position_index,
+                self._receiver_position_index,
+                self.azimuth_angle,
+            )
             if joint_index not in self._spectrogram_cache:
                 audiogoal = self.get_current_audiogoal_observation()
                 self._spectrogram_cache[joint_index] = audiogoal2spectrogram(audiogoal)
@@ -662,7 +805,10 @@ class SoundSpacesSim(Simulator, ABC):
             index_a = self._position_to_index(position_a)
             index_b = self._position_to_index(position_b)
             assert index_a is not None and index_b is not None
-            path_length = nx.shortest_path_length(self.graph, index_a, index_b) * self.config.GRID_SIZE
+            path_length = (
+                nx.shortest_path_length(self.graph, index_a, index_b)
+                * self.config.GRID_SIZE
+            )
             distances.append(path_length)
 
         return min(distances)
@@ -675,7 +821,7 @@ class SoundSpacesSim(Simulator, ABC):
         shortest_path = nx.shortest_path(self.graph, source=index_a, target=index_b)
         points = list()
         for node in shortest_path:
-            points.append(self.graph.nodes()[node]['point'])
+            points.append(self.graph.nodes()[node]["point"])
         return points
 
     def compute_oracle_actions(self):
@@ -689,10 +835,13 @@ class SoundSpacesSim(Simulator, ABC):
         orientation = self.get_orientation()
         for i in range(len(shortest_path) - 1):
             prev_node = shortest_path[i]
-            next_node = shortest_path[i+1]
-            p1 = self.graph.nodes[prev_node]['point']
-            p2 = self.graph.nodes[next_node]['point']
-            direction = int(np.around(np.rad2deg(np.arctan2(p2[2] - p1[2], p2[0] - p1[0])))) % 360
+            next_node = shortest_path[i + 1]
+            p1 = self.graph.nodes[prev_node]["point"]
+            p2 = self.graph.nodes[next_node]["point"]
+            direction = (
+                int(np.around(np.rad2deg(np.arctan2(p2[2] - p1[2], p2[0] - p1[0]))))
+                % 360
+            )
             if direction == orientation:
                 pass
             elif (direction - orientation) % 360 == 270:
@@ -718,7 +867,10 @@ class SoundSpacesSim(Simulator, ABC):
 
     def find_nearest_graph_node(self, target_pos):
         from scipy.spatial import cKDTree
-        all_points = np.array([self.graph.nodes()[node]['point'] for node in self.graph.nodes()])
+
+        all_points = np.array(
+            [self.graph.nodes()[node]["point"] for node in self.graph.nodes()]
+        )
         kd_tree = cKDTree(all_points[:, [0, 2]])
         d, ind = kd_tree.query(target_pos[[0, 2]])
         return all_points[ind]
@@ -727,18 +879,16 @@ class SoundSpacesSim(Simulator, ABC):
         self._sim.seed(seed)
 
     def get_observations_at(
-            self,
-            position: Optional[List[float]] = None,
-            rotation: Optional[List[float]] = None,
-            keep_agent_at_new_pose: bool = False,
+        self,
+        position: Optional[List[float]] = None,
+        rotation: Optional[List[float]] = None,
+        keep_agent_at_new_pose: bool = False,
     ) -> Optional[Observations]:
         current_state = self.get_agent_state()
         if position is None or rotation is None:
             success = True
         else:
-            success = self.set_agent_state(
-                position, rotation, reset_sensors=False
-            )
+            success = self.set_agent_state(position, rotation, reset_sensors=False)
 
         if success:
             sim_obs = self._sim.get_sensor_observations()
@@ -748,9 +898,7 @@ class SoundSpacesSim(Simulator, ABC):
             observations = self._sensor_suite.get_observations(sim_obs)
             if not keep_agent_at_new_pose:
                 self.set_agent_state(
-                    current_state.position,
-                    current_state.rotation,
-                    reset_sensors=False,
+                    current_state.position, current_state.rotation, reset_sensors=False,
                 )
             return observations
         else:

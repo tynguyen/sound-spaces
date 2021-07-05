@@ -50,7 +50,7 @@ def interactive_demo(config, env):
     frames = list()
     audios = list()
     observation = env.reset()
-    rgb_image = np.swapaxes(observation['rgb'], 0, 1)
+    rgb_image = np.swapaxes(observation["rgb"], 0, 1)
     # screen.blit(pygame.surfarray.make_surface(rgb_image), (0, 0))
     pygame.display.flip()
     # -------- Main Program Loop -----------
@@ -67,34 +67,37 @@ def interactive_demo(config, env):
                         action = None
                         if event.key == pygame.K_w:  # w
                             action = HabitatSimActions.MOVE_FORWARD
-                            keys.append('w')
+                            keys.append("w")
                         elif event.key == pygame.K_a:  # a
                             action = HabitatSimActions.TURN_LEFT
-                            keys.append('a')
+                            keys.append("a")
                         elif event.key == pygame.K_d:  # d
                             action = HabitatSimActions.TURN_RIGHT
-                            keys.append('d')
+                            keys.append("d")
                         elif event.key == pygame.K_f:  # f
                             action = HabitatSimActions.STOP
-                            keys.append('f')
+                            keys.append("f")
                         if action is not None:
                             return action
 
         action = wait()
         # --- Game logic should go here
-        observation, reward, done, info = env.step(**{'action': action})
+        observation, reward, done, info = env.step(**{"action": action})
         if env.get_done(None):
             # observation = env.reset()
             break
 
-        if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE and 'intermediate' in observation:
-            for obs in observation['intermediate']:
+        if (
+            config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE
+            and "intermediate" in observation
+        ):
+            for obs in observation["intermediate"]:
                 frame = observations_to_image(obs, info)
                 frames.append(frame)
         frame = observations_to_image(observation, info)
         frames.append(frame)
         frame = np.swapaxes(frame, 0, 1)
-        audio = observation['audiogoal']
+        audio = observation["audiogoal"]
         audios.append(audio)
 
         # Here, we clear the screen to white. Don't put other drawing commands
@@ -105,7 +108,7 @@ def interactive_demo(config, env):
         # screen.blit(pygame.surfarray.make_surface(smaller_frame), (0, 0))
 
         # play sound
-        # temp_file = 'data/temp/temp.wav'
+        # temp_file = 'data/sounds/1st_all/bell.wav'
         # sr = config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE
         # audio = np.int16(audio * 32767).T
         # wavfile.write(temp_file, sr, audio)
@@ -122,15 +125,24 @@ def interactive_demo(config, env):
     # Close the window and quit.
     pygame.quit()
     env.close()
-    print('Keys: {}'.format(','.join(keys)))
+    print("Keys: {}".format(",".join(keys)))
 
     # write frames and audio into videos
-    video_dir = 'data/visualizations/demo'
-    video_name = 'demo'
-    fps = config.TASK_CONFIG.SIMULATOR.VIEW_CHANGE_FPS \
-        if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE else 1
-    images_to_video_with_audio(frames, video_dir, video_name, audios,
-                               sr=config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE, fps=fps)
+    video_dir = "data/visualizations/demo"
+    video_name = "demo"
+    fps = (
+        config.TASK_CONFIG.SIMULATOR.VIEW_CHANGE_FPS
+        if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE
+        else 1
+    )
+    images_to_video_with_audio(
+        frames,
+        video_dir,
+        video_name,
+        audios,
+        sr=config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE,
+        fps=fps,
+    )
 
 
 def following(config, env, keys):
@@ -138,38 +150,50 @@ def following(config, env, keys):
     frames = list()
     audios = list()
     for key in keys:
-        if key == 'w':  # w
+        if key == "w":  # w
             action = HabitatSimActions.MOVE_FORWARD
-        elif key == 'a':  # a
+        elif key == "a":  # a
             action = HabitatSimActions.TURN_LEFT
-        elif key == 'd':  # d
+        elif key == "d":  # d
             action = HabitatSimActions.TURN_RIGHT
-        elif key == 'f':  # f
+        elif key == "f":  # f
             action = HabitatSimActions.STOP
 
         # --- Game logic should go here
-        observation, reward, done, info = env.step(**{'action': action})
+        observation, reward, done, info = env.step(**{"action": action})
         if env.get_done(None):
             break
 
-        if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE and 'intermediate' in observation:
-            for obs in observation['intermediate']:
+        if (
+            config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE
+            and "intermediate" in observation
+        ):
+            for obs in observation["intermediate"]:
                 frame = observations_to_image(obs, info)
                 frames.append(frame)
         frame = observations_to_image(observation, info)
         frames.append(frame)
-        audio = observation['audiogoal']
+        audio = observation["audiogoal"]
         audios.append(audio)
 
     env.close()
 
     # write frames and audio into videos
-    video_dir = 'data/visualizations/demo'
-    video_name = 'demo'
-    fps = config.TASK_CONFIG.SIMULATOR.VIEW_CHANGE_FPS \
-        if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE else 1
-    images_to_video_with_audio(frames, video_dir, video_name, audios,
-                               sr=config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE, fps=fps)
+    video_dir = "data/visualizations/demo"
+    video_name = "demo"
+    fps = (
+        config.TASK_CONFIG.SIMULATOR.VIEW_CHANGE_FPS
+        if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE
+        else 1
+    )
+    images_to_video_with_audio(
+        frames,
+        video_dir,
+        video_name,
+        audios,
+        sr=config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE,
+        fps=fps,
+    )
 
 
 def main():
@@ -180,14 +204,14 @@ def main():
     parser.add_argument(
         "--run-type",
         choices=["train", "eval"],
-        default='eval',
+        default="eval",
         help="run type of the experiment (train or eval)",
     )
     parser.add_argument(
         "--exp-config",
         type=str,
         required=False,
-        default='ss_baselines/av_nav/config/audionav/mp3d/interactive_demo.yaml',
+        default="ss_baselines/av_nav/config/audionav/replica/interactive_demo.yaml",
         help="path to config yaml containing info about experiment",
     )
     parser.add_argument(
@@ -199,47 +223,57 @@ def main():
     parser.add_argument(
         "--debug",
         default=False,
-        action='store_true',
+        action="store_true",
         help="Modify config options from command line",
     )
     parser.add_argument(
-        "--keys",
-        default='',
-        type=str,
-        help="Modify config options from command line",
+        "--keys", default="", type=str, help="Modify config options from command line",
     )
     args = parser.parse_args()
 
     # file_handler = logging.FileHandler(log_file, mode=mode)
     stdout_handler = logging.StreamHandler(sys.stdout)
     level = logging.INFO if not args.debug else logging.DEBUG
-    logging.basicConfig(level=level, handlers=[stdout_handler],
-                        format='%(asctime)s, %(levelname)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
-
+    logging.basicConfig(
+        level=level,
+        handlers=[stdout_handler],
+        format="%(asctime)s, %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    breakpoint()
     config = get_config(
-        config_paths=args.exp_config,
-        opts=args.opts,
-        run_type=args.run_type)
+        config_paths=args.exp_config, opts=args.opts, run_type=args.run_type
+    )
     config.defrost()
-    config.TASK_CONFIG.TASK.MEASUREMENTS.append("TOP_DOWN_MAP")
+
+    # TODO: comment this line to fix the segfault issue
+    # config.TASK_CONFIG.TASK.MEASUREMENTS.append("TOP_DOWN_MAP")
+
     config.TASK_CONFIG.DATASET.SPLIT = config.EVAL.SPLIT
-    if args.keys == '':
-        config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.WIDTH = config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.HEIGHT = \
-            config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.WIDTH = config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.HEIGHT = 256
+    # TODO: add this line to fix the segfault issue
+    config.TASK_CONFIG.SIMULATOR.USE_RENDERED_OBSERVATIONS = True
+    if args.keys == "":
+        config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.WIDTH = (
+            config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.HEIGHT
+        ) = (
+            config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.WIDTH
+        ) = config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.HEIGHT = 256
         config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE = False
     else:
         config.TASK_CONFIG.TASK.TOP_DOWN_MAP.DRAW_GOAL_POSITIONS = False
     config.freeze()
     print(config)
-    dataset = make_dataset(id_dataset=config.TASK_CONFIG.DATASET.TYPE, config=config.TASK_CONFIG.DATASET)
+    dataset = make_dataset(
+        id_dataset=config.TASK_CONFIG.DATASET.TYPE, config=config.TASK_CONFIG.DATASET
+    )
     env = AudioNavRLEnv(config=config, dataset=dataset)
 
-    if args.keys == '':
+    if args.keys == "":
         interactive_demo(config, env)
     else:
-        keys = args.keys.split(',')
+        keys = args.keys.split(",")
         following(config, env, keys)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

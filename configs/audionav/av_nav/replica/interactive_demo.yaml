@@ -12,12 +12,13 @@ SIMULATOR:
 
   TYPE: "SoundSpacesSim"
   ACTION_SPACE_CONFIG: "v0"
+  SCENE_DATASET: "replica"
   USE_RENDERED_OBSERVATIONS: False
   CONTINUOUS_VIEW_CHANGE: True
   VIEW_CHANGE_FPS: 30
   AUDIO:
-    RIR_SAMPLING_RATE: 44100
-    SOURCE_SOUND_DIR: "data/sounds/demo"
+    RIR_SAMPLING_RATE: 16000
+    SOURCE_SOUND_DIR: "data/sounds/1s_all"
 
 TASK:
   TYPE: AudioNav
@@ -38,7 +39,7 @@ TASK:
 
 DATASET:
   TYPE: "AudioNav"
-  SPLIT: "train_telephone"
+  SPLIT: "val_telephone"
   CONTENT_SCENES: ["*"]
   VERSION: 'v1'
   SCENES_DIR: "data/scene_datasets/replica"
