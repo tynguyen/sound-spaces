@@ -1,15 +1,26 @@
 # Audio-Visual Navigation (AV-Nav) Model
 
+## Usage
+### Visualize Points in the Graph (graph.pkl) within the Scene's Mesh
+```
+python scripts/get_RGBS_from_a_scene.py --visualize_mesh
+```
+
+### Obtain RGB-S from Each Scene
+```
+python scripts/get_RGBS_from_a_scene.py
+```
+
 ## Details
-This folder provides the code of the model as well as the training/evaluation configurations used in the 
+This folder provides the code of the model as well as the training/evaluation configurations used in the
 [SoundSpaces: Audio-Visual Navigation in 3D Environments](https://arxiv.org/pdf/1912.11474.pdf) paper.
 Use of this model is the same as described in the usage section of the main README file.
 Pretrained weights are provided.
 
 ## Evaluating pretrained model
 ```
-py ss_baselines/av_nav/run.py --run-type eval --exp-config ss_baselines/av_nav/config/audionav/replica/test_telephone/audiogoal_depth.yaml EVAL_CKPT_PATH_DIR data/pretrained_weights/audionav/av_nav/replica/heard.pth 
-py ss_baselines/av_nav/run.py --run-type eval --exp-config ss_baselines/av_nav/config/audionav/replica/test_telephone/audiogoal_depth.yaml EVAL_CKPT_PATH_DIR data/pretrained_weights/audionav/av_nav/replica/unheard.pth EVAL.SPLIT test_multiple_unheard 
+py ss_baselines/av_nav/run.py --run-type eval --exp-config ss_baselines/av_nav/config/audionav/replica/test_telephone/audiogoal_depth.yaml EVAL_CKPT_PATH_DIR data/pretrained_weights/audionav/av_nav/replica/heard.pth
+py ss_baselines/av_nav/run.py --run-type eval --exp-config ss_baselines/av_nav/config/audionav/replica/test_telephone/audiogoal_depth.yaml EVAL_CKPT_PATH_DIR data/pretrained_weights/audionav/av_nav/replica/unheard.pth EVAL.SPLIT test_multiple_unheard
 ```
 
 

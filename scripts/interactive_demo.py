@@ -131,6 +131,13 @@ def interactive_demo(config, env):
     env.close()
     print("Keys: {}".format(",".join(keys)))
 
+    # DO: debug
+    import matplotlib.pyplot as plt
+
+    plt.imshow(frames[0])
+    plt.show()
+    env.close()
+
     # write frames and audio into videos
     video_dir = "data/visualizations/demo"
     video_name = "demo"
@@ -140,7 +147,6 @@ def interactive_demo(config, env):
         else 1
     )
 
-    breakpoint()
     images_to_video_with_audio(
         frames,
         video_dir,
@@ -181,9 +187,6 @@ def following(config, env, keys):
         frames.append(frame)
         audio = observation["audiogoal"]
         audios.append(audio)
-
-    env.close()
-    breakpoint()
     # write frames and audio into videos
     video_dir = "data/visualizations/demo"
     video_name = "demo"
@@ -251,24 +254,29 @@ def main():
         config_paths=args.exp_config, opts=args.opts, run_type=args.run_type
     )
     config.defrost()
-
-    # TODO: comment this line to fix the segfault issue
+    print(f"[Info] Config before setting RGB = 1024: \n {config}")
+    # DO: comment this line to fix the segfault issue
     # config.TASK_CONFIG.TASK.MEASUREMENTS.append("TOP_DOWN_MAP")
 
     config.TASK_CONFIG.DATASET.SPLIT = config.EVAL.SPLIT
-    # TODO: add this line to fix the segfault issue
+    # DO: add this line to fix the segfault issue
     config.TASK_CONFIG.SIMULATOR.USE_RENDERED_OBSERVATIONS = True
     if args.keys == "":
         config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.WIDTH = (
             config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.HEIGHT
         ) = (
             config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.WIDTH
-        ) = config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.HEIGHT = 256
-        config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE = False
+            # DO: set 1024 to make it large
+        ) = config.TASK_CONFIG.SIMULATOR.DEPTH_SENSOR.HEIGHT = 1024  # 256
+        # DO: set True to be able to move around
+        config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE = True  # False
     else:
         config.TASK_CONFIG.TASK.TOP_DOWN_MAP.DRAW_GOAL_POSITIONS = False
     config.freeze()
-    print(config)
+    print(
+        f"[Info] RGB sensor {config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.HEIGHT, config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.WIDTH}"
+    )
+    print(f"[Info] Config after setting RGB = 1024: \n {config}")
     dataset = make_dataset(
         id_dataset=config.TASK_CONFIG.DATASET.TYPE, config=config.TASK_CONFIG.DATASET
     )

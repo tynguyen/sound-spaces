@@ -9,7 +9,6 @@ SIMULATOR:
   DEPTH_SENSOR:
     WIDTH: 1024
     HEIGHT: 1024
-
   TYPE: "SoundSpacesSim"
   ACTION_SPACE_CONFIG: "v0"
   SCENE_DATASET: "replica"
