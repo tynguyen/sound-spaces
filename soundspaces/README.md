@@ -1,7 +1,7 @@
 # SoundSpaces Dataset
 
 ## Overview
-The SoundSpaces dataset includes audio renderings (room impulse responses) for two datasets, metadata of each scene, episode datasets and mono sound files. 
+The SoundSpaces dataset includes audio renderings (room impulse responses) for two datasets, metadata of each scene, episode datasets and mono sound files.
 
 
 ## Download
@@ -11,7 +11,7 @@ The SoundSpaces dataset includes audio renderings (room impulse responses) for t
 ```
 python scripts/cache_observations.py
 ```
-3. Run the commands below in the **data** directory to download partial binaural RIRs (867G), metadata (1M), datasets (77M) and sound files (13M). Note that this partial binaural RIRs only contain renderings for nodes accessible by the agent on the navigation graph. 
+3. Run the commands below in the **data** directory to download partial binaural RIRs (867G), metadata (1M), datasets (77M) and sound files (13M). Note that this partial binaural RIRs only contain renderings for nodes accessible by the agent on the navigation graph.
 ```
 wget http://dl.fbaipublicfiles.com/SoundSpaces/binaural_rirs.tar && tar xvf binaural_rirs.tar
 wget http://dl.fbaipublicfiles.com/SoundSpaces/metadata.tar.xz && tar xvf metadata.tar.xz

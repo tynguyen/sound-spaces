@@ -146,7 +146,7 @@ def interactive_demo(config, env):
         if config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE
         else 1
     )
-
+    breakpoint()
     images_to_video_with_audio(
         frames,
         video_dir,

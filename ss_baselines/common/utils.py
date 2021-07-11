@@ -82,7 +82,9 @@ class CategoricalNetWithMask(nn.Module):
     def forward(self, features, action_maps):
         probs = f.softmax(self.linear(features))
         if self.masking:
-            probs = probs * torch.reshape(action_maps, (action_maps.shape[0], -1)).float()
+            probs = (
+                probs * torch.reshape(action_maps, (action_maps.shape[0], -1)).float()
+            )
 
         return CustomFixedCategorical(probs=probs)
 
@@ -124,7 +126,7 @@ def to_tensor(v):
 
 
 def batch_obs(
-    observations: List[Dict], device: Optional[torch.device] = None, skip_list = []
+    observations: List[Dict], device: Optional[torch.device] = None, skip_list=[]
 ) -> Dict[str, torch.Tensor]:
     r"""Transpose a batch of observation dicts to a dict of batched
     observations.
@@ -171,9 +173,7 @@ def poll_checkpoint_folder(
     assert os.path.isdir(checkpoint_folder), (
         f"invalid checkpoint folder " f"path {checkpoint_folder}"
     )
-    models_paths = list(
-        filter(os.path.isfile, glob.glob(checkpoint_folder + "/*"))
-    )
+    models_paths = list(filter(os.path.isfile, glob.glob(checkpoint_folder + "/*")))
     models_paths.sort(key=os.path.getmtime)
     ind = previous_ckpt_ind + eval_interval
     if ind < len(models_paths):
@@ -194,7 +194,7 @@ def generate_video(
     metric_value: float,
     tb_writer: TensorboardWriter,
     fps: int = 10,
-    audios: List[str] = None
+    audios: List[str] = None,
 ) -> None:
     r"""Generate video according to specified information.
 
@@ -221,20 +221,22 @@ def generate_video(
         if audios is None:
             images_to_video(images, video_dir, video_name)
         else:
-            images_to_video_with_audio(images, video_dir, video_name, audios, sr, fps=fps)
+            images_to_video_with_audio(
+                images, video_dir, video_name, audios, sr, fps=fps
+            )
     if "tensorboard" in video_option:
         tb_writer.add_video_from_np_images(
             f"episode{episode_id}", checkpoint_idx, images, fps=fps
         )
 
 
-def plot_top_down_map(info, dataset='replica', pred=None):
+def plot_top_down_map(info, dataset="replica", pred=None):
     top_down_map = info["top_down_map"]["map"]
     top_down_map = maps.colorize_topdown_map(
         top_down_map, info["top_down_map"]["fog_of_war_mask"]
     )
     map_agent_pos = info["top_down_map"]["agent_map_coord"]
-    if dataset == 'replica':
+    if dataset == "replica":
         agent_radius_px = top_down_map.shape[0] // 16
     else:
         agent_radius_px = top_down_map.shape[0] // 50
@@ -242,7 +244,7 @@ def plot_top_down_map(info, dataset='replica', pred=None):
         image=top_down_map,
         agent_center_coord=map_agent_pos,
         agent_rotation=info["top_down_map"]["agent_angle"],
-        agent_radius_px=agent_radius_px
+        agent_radius_px=agent_radius_px,
     )
     if pred is not None:
         from habitat.utils.geometry_utils import quaternion_rotate_vector
@@ -251,7 +253,9 @@ def plot_top_down_map(info, dataset='replica', pred=None):
 
         rounded_pred = np.round(pred[1])
         direction_vector_agent = np.array([rounded_pred[1], 0, -rounded_pred[0]])
-        direction_vector = quaternion_rotate_vector(source_rotation, direction_vector_agent)
+        direction_vector = quaternion_rotate_vector(
+            source_rotation, direction_vector_agent
+        )
 
         grid_size = (
             (maps.COORDINATE_MAX - maps.COORDINATE_MIN) / 10000,
@@ -265,8 +269,11 @@ def plot_top_down_map(info, dataset='replica', pred=None):
         point_padding = 20
         for m in range(x - point_padding, x + point_padding + 1):
             for n in range(y - point_padding, y + point_padding + 1):
-                if np.linalg.norm(np.array([m - x, n - y])) <= point_padding and \
-                        0 <= m < top_down_map.shape[0] and 0 <= n < top_down_map.shape[1]:
+                if (
+                    np.linalg.norm(np.array([m - x, n - y])) <= point_padding
+                    and 0 <= m < top_down_map.shape[0]
+                    and 0 <= n < top_down_map.shape[1]
+                ):
                     top_down_map[m, n] = (0, 255, 255)
         if np.linalg.norm(rounded_pred) < 1:
             assert delta_x == 0 and delta_y == 0
@@ -274,6 +281,7 @@ def plot_top_down_map(info, dataset='replica', pred=None):
     if top_down_map.shape[0] > top_down_map.shape[1]:
         top_down_map = np.rot90(top_down_map, 1)
     return top_down_map
+
 
 def images_to_video_with_audio(
     images: List[np.ndarray],
@@ -283,7 +291,7 @@ def images_to_video_with_audio(
     sr: int,
     fps: int = 1,
     quality: Optional[float] = 5,
-    **kwargs
+    **kwargs,
 ):
     r"""Calls imageio to run FFMPEG on a list of images. For more info on
     parameters, see https://imageio.readthedocs.io/en/stable/format_ffmpeg.html
@@ -304,17 +312,16 @@ def images_to_video_with_audio(
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     video_name = video_name.replace(" ", "_").replace("\n", "_") + ".mp4"
-    
 
     assert len(images) == len(audios) * fps
     audio_clips = []
-    temp_file_name = '/tmp/{}.wav'.format(random.randint(0, 10000))
+    temp_file_name = "/tmp/{}.wav".format(random.randint(0, 10000))
     # use amplitude scaling factor to reduce the volume of sounds
     amplitude_scaling_factor = 100
     for i, audio in enumerate(audios):
         # def f(t):
         #     return audio[0, t], audio[1: t]
-        # 
+        #
         # audio_clip = mpy.AudioClip(f, duration=1, fps=audio.shape[1])
         wavfile.write(temp_file_name, sr, audio.T / amplitude_scaling_factor)
         audio_clip = mpy.AudioFileClip(temp_file_name)
@@ -324,15 +331,19 @@ def images_to_video_with_audio(
     composite_audio_clip = CompositeAudioClip(audio_clips)
     video_clip = mpy.ImageSequenceClip(images, fps=fps)
     video_with_new_audio = video_clip.set_audio(composite_audio_clip)
-    video_with_new_audio.write_videofile(os.path.join(output_dir, video_name))
+    video_with_new_audio.write_videofile(os.path.join(output_dir, video_name), fps=fps)
     os.remove(temp_file_name)
 
 
 def resize_observation(observations, model_resolution):
     for observation in observations:
-        observation['rgb'] = cv2.resize(observation['rgb'], (model_resolution, model_resolution))
-        observation['depth'] = np.expand_dims(cv2.resize(observation['depth'], (model_resolution, model_resolution)),
-                                              axis=-1)
+        observation["rgb"] = cv2.resize(
+            observation["rgb"], (model_resolution, model_resolution)
+        )
+        observation["depth"] = np.expand_dims(
+            cv2.resize(observation["depth"], (model_resolution, model_resolution)),
+            axis=-1,
+        )
 
 
 def convert_semantics_to_rgb(semantics):
@@ -370,13 +381,8 @@ class ResizeCenterCropper(nn.Module):
         observation_space = copy.deepcopy(observation_space)
         if size:
             for key in observation_space.spaces:
-                if (
-                    key in trans_keys
-                    and observation_space.spaces[key].shape != size
-                ):
-                    logger.info(
-                        "Overwriting CNN input size of %s: %s" % (key, size)
-                    )
+                if key in trans_keys and observation_space.spaces[key].shape != size:
+                    logger.info("Overwriting CNN input size of %s: %s" % (key, size))
                     observation_space.spaces[key] = overwrite_gym_box_shape(
                         observation_space.spaces[key], size
                     )
@@ -431,9 +437,9 @@ def image_resize_shortest_edge(
     scale = size / min(h, w)
     h = int(h * scale)
     w = int(w * scale)
-    img = torch.nn.functional.interpolate(
-        img.float(), size=(h, w), mode="area"
-    ).to(dtype=img.dtype)
+    img = torch.nn.functional.interpolate(img.float(), size=(h, w), mode="area").to(
+        dtype=img.dtype
+    )
     if channels_last:
         if len(img.shape) == 4:
             # NCHW -> NHWC
@@ -528,9 +534,7 @@ def observations_to_image(observation: Dict, info: Dict, pred=None) -> np.ndarra
         depth_map = np.stack([depth_map for _ in range(3)], axis=2)
         egocentric_view.append(depth_map)
 
-    assert (
-        len(egocentric_view) > 0
-    ), "Expected at least one visual sensor enabled."
+    assert len(egocentric_view) > 0, "Expected at least one visual sensor enabled."
     egocentric_view = np.concatenate(egocentric_view, axis=1)
 
     # draw collision
@@ -560,7 +564,9 @@ def observations_to_image(observation: Dict, info: Dict, pred=None) -> np.ndarra
 
             rounded_pred = np.round(pred[1])
             direction_vector_agent = np.array([rounded_pred[1], 0, -rounded_pred[0]])
-            direction_vector = quaternion_rotate_vector(source_rotation, direction_vector_agent)
+            direction_vector = quaternion_rotate_vector(
+                source_rotation, direction_vector_agent
+            )
             # pred_goal_location = source_position + direction_vector.astype(np.float32)
 
             grid_size = (
@@ -570,13 +576,20 @@ def observations_to_image(observation: Dict, info: Dict, pred=None) -> np.ndarra
             delta_x = int(-direction_vector[0] / grid_size[0])
             delta_y = int(direction_vector[2] / grid_size[1])
 
-            x = np.clip(map_agent_pos[0] + delta_x, a_min=0, a_max=top_down_map.shape[0])
-            y = np.clip(map_agent_pos[1] + delta_y, a_min=0, a_max=top_down_map.shape[1])
+            x = np.clip(
+                map_agent_pos[0] + delta_x, a_min=0, a_max=top_down_map.shape[0]
+            )
+            y = np.clip(
+                map_agent_pos[1] + delta_y, a_min=0, a_max=top_down_map.shape[1]
+            )
             point_padding = 12
             for m in range(x - point_padding, x + point_padding + 1):
                 for n in range(y - point_padding, y + point_padding + 1):
-                    if np.linalg.norm(np.array([m - x, n - y])) <= point_padding and \
-                            0 <= m < top_down_map.shape[0] and 0 <= n < top_down_map.shape[1]:
+                    if (
+                        np.linalg.norm(np.array([m - x, n - y])) <= point_padding
+                        and 0 <= m < top_down_map.shape[0]
+                        and 0 <= n < top_down_map.shape[1]
+                    ):
                         top_down_map[m, n] = (0, 255, 255)
             if np.linalg.norm(rounded_pred) < 1:
                 assert delta_x == 0 and delta_y == 0
@@ -598,27 +611,27 @@ def observations_to_image(observation: Dict, info: Dict, pred=None) -> np.ndarra
         else:
             # draw label
             CATEGORY_INDEX_MAPPING = {
-                'chair': 0,
-                'table': 1,
-                'picture': 2,
-                'cabinet': 3,
-                'cushion': 4,
-                'sofa': 5,
-                'bed': 6,
-                'chest_of_drawers': 7,
-                'plant': 8,
-                'sink': 9,
-                'toilet': 10,
-                'stool': 11,
-                'towel': 12,
-                'tv_monitor': 13,
-                'shower': 14,
-                'bathtub': 15,
-                'counter': 16,
-                'fireplace': 17,
-                'gym_equipment': 18,
-                'seating': 19,
-                'clothes': 20
+                "chair": 0,
+                "table": 1,
+                "picture": 2,
+                "cabinet": 3,
+                "cushion": 4,
+                "sofa": 5,
+                "bed": 6,
+                "chest_of_drawers": 7,
+                "plant": 8,
+                "sink": 9,
+                "toilet": 10,
+                "stool": 11,
+                "towel": 12,
+                "tv_monitor": 13,
+                "shower": 14,
+                "bathtub": 15,
+                "counter": 16,
+                "fireplace": 17,
+                "gym_equipment": 18,
+                "seating": 19,
+                "clothes": 20,
             }
             index2label = {v: k for k, v in CATEGORY_INDEX_MAPPING.items()}
             pred_label = index2label[pred[0]]
@@ -635,9 +648,23 @@ def observations_to_image(observation: Dict, info: Dict, pred=None) -> np.ndarra
             )
 
             top_down_map = np.concatenate(
-                [np.ones([text_height, top_down_map.shape[1], 3], dtype=np.int32) * 255, top_down_map], axis=0)
-            top_down_map = cv2.putText(top_down_map, 'C_t: ' + pred_label.replace('_', ' '), (10, text_height - 10),
-                                       cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 0), 2, cv2.LINE_AA)
+                [
+                    np.ones([text_height, top_down_map.shape[1], 3], dtype=np.int32)
+                    * 255,
+                    top_down_map,
+                ],
+                axis=0,
+            )
+            top_down_map = cv2.putText(
+                top_down_map,
+                "C_t: " + pred_label.replace("_", " "),
+                (10, text_height - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.4,
+                (0, 0, 0),
+                2,
+                cv2.LINE_AA,
+            )
 
         frame = np.concatenate((egocentric_view, top_down_map), axis=1)
     return frame

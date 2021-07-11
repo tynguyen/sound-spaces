@@ -613,7 +613,7 @@ class SoundSpacesSim(Simulator, ABC):
         return self._source_position_index == self._receiver_position_index
 
     def _update_observations_with_audio(self, observations):
-        audio = self.get_current_audio_observation()
+        audio = self.get_current_audiogoal_observation()
         observations.update({"audio": audio})
 
     def _load_source_sounds(self):
