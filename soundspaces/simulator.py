@@ -90,6 +90,7 @@ class DummySimulator:
         self._sim_obs = sim_obs
 
     def get_sensor_observations(self):
+        breakpoint()
         return self._sim_obs
 
     def close(self):

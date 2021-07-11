@@ -45,7 +45,9 @@ from ss_baselines.common.utils import images_to_video_with_audio
 import open3d as o3d
 
 
-def convert_observation_to_frame(observation: Dict) -> np.ndarray:
+def convert_observation_to_frame(
+    observation: Dict, is_depth_normalized=False
+) -> np.ndarray:
     r"""Generate image of single frame from observation
 
     Args:
@@ -63,7 +65,9 @@ def convert_observation_to_frame(observation: Dict) -> np.ndarray:
 
     # draw depth map if observation has depth info
     if "depth" in observation:
-        depth_map = observation["depth"].squeeze() * 255.0
+        depth_map = observation["depth"].squeeze()
+        if is_depth_normalized:
+            depth_map *= 255.0
         if not isinstance(depth_map, np.ndarray):
             depth_map = depth_map.cpu().numpy()
 
@@ -88,6 +92,91 @@ def convert_observation_to_frame(observation: Dict) -> np.ndarray:
 
 
 class CustomSim(SoundSpacesSim):
+    def transform_rgbd_to_world_pcl(
+        self, hat2w_T, rgb, depth, cam_position=None, cam_quat=None
+    ):
+        """
+        @Brief: transform RGBD to pointcloud in the world's coord
+        Make sure depth is already aligned in the rgb frame
+        @Args:
+            - hat2w_T (np.ndarray, 4x4): transformation from habitat-sim to open3d
+            - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
+            - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
+                the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
+        """
+        depth = depth.squeeze()[None]  # 1 x H x W
+        img_h, img_w = rgb.shape[:2]
+        # [-1, 1] for x and [1, -1] for y as array indexing is y-down while world is y-up
+        xs, ys = np.meshgrid(np.linspace(-1, 1, img_w), np.linspace(1, -1, img_h))
+        xs = xs.reshape(1, img_h, img_w)
+        ys = ys.reshape(1, img_h, img_w)
+
+        # Unproject
+        # negate depth as the camera looks along -Z
+        xys = np.vstack((xs * depth, ys * depth, -depth, np.ones(depth.shape)))
+        xys = xys.reshape(4, -1)
+        xy_c0 = np.matmul(np.linalg.inv(self.rgb_intrinsics), xys)
+
+        # Visualize the points
+        pcl_points = xy_c0[:3, :].T
+        pcl_cam = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pcl_points))
+        # return pcl_cam
+        # o3d.visualization.draw_geometries([pcl])
+
+        #
+        cam_rotation_mat = scipy.spatial.transform.Rotation.from_quat(
+            cam_quat
+        ).as_matrix()
+        cam_2hat_T = np.column_stack((cam_rotation_mat, cam_position))
+        cam_2hat_T = np.vstack((cam_2hat_T, (0, 0, 0, 1)))
+        cam2w_T = hat2w_T @ cam_2hat_T
+        # print(f"[Info] Angle {angle}, rot mat to habitat \n {agent2hat_T}")
+        # print(f"[Info] Angle {angle}, rot mat to world \n {agent2w_T}")
+
+        # Transform the (0,0,0) coordinate frame to obtain that of the aagent w.r.t the o3d's coord system
+        pcl_cam.transform(cam2w_T)
+        return pcl_cam
+
+    def compute_rgb_intrinsics(self):
+        """
+        @Brief: calculate the intrinsics parameters for the RGB sensor
+        """
+        h = self.config.RGB_SENSOR.HEIGHT
+        w = self.config.RGB_SENSOR.WIDTH
+        hfov = (self.config.RGB_SENSOR.HFOV) / 180.0 * np.pi
+        vfov = 2 * np.arctan(np.tan(hfov / 2) * h / float(w))
+        fx = 1.0 / np.tan(hfov / 2.0)
+        fy = 1.0 / np.tan(vfov / 2.0)
+        K = np.array(
+            [
+                [fx, 0.0, 0.0, 0.0],
+                [0.0, fy, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        self.rgb_intrinsics = K
+
+    def compute_depth_intrinsics(self):
+        """
+        @Brief: calculate the intrinsics parameters for the depth sensor
+        """
+        h = self.config.DEPTH_SENSOR.HEIGHT
+        w = self.config.DEPTH_SENSOR.WIDTH
+        hfov = (self.config.DEPTH_SENSOR.HFOV) / 180.0 * np.pi
+        vfov = 2 * np.arctan(np.tan(hfov / 2) * h / float(w))
+        fx = 1.0 / np.tan(hfov / 2.0)
+        fy = 1.0 / np.tan(vfov / 2.0)
+        K = np.array(
+            [
+                [fx, 0.0, 0.0, 0.0],
+                [0.0, fy, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        self.depth_intrinsics = K
+
     def convert_position_to_index(self, position: List) -> int:
         return self._position_to_index_mapping[self.position_encoding(position)]
 
@@ -199,24 +288,6 @@ class CustomSim(SoundSpacesSim):
         return self._compute_euclidean_distance_between_sr_locations()
 
 
-def updateO3dPose(visualizer, old_pose, new_pose):
-    """
-    @Brief: non-blocking update the pose
-    """
-    old_pose.vertices = old_pose.vertices
-    old_pose.triangles = old_pose.triangles
-    old_pose.vertex_colors = old_pose.vertex_colors
-    visualizer.update_geometry(old_pose)
-
-
-def refreshO3dVis(visualizer):
-    """
-    @Brief: refresh the open3d visualzier to reflect new appearances of objects
-    """
-    visualizer.poll_events()
-    visualizer.update_renderer()
-
-
 def main(dataset):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -316,6 +387,9 @@ def main(dataset):
                 "data/scene_datasets", dataset, scene, scene + ".glb"
             )
 
+        # By default, habitat uses a different convention for cartisian cordinate system
+        hat2w_T = np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1],])
+
         # Visualize the env
         if args.visualize_mesh:
             # Map pointcloud
@@ -337,10 +411,9 @@ def main(dataset):
             )
             o3d_visualizer.add_geometry(o3d_agent_pos)
 
-            # By default, habitat uses a different convention for cartisian cordinate system
-            hat2w_T = np.array(
-                [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1],]
-            )
+            # Instant Observation
+            o3d_obs_pcl = o3d.geometry.PointCloud()
+            o3d_visualizer.add_geometry(o3d_obs_pcl)
 
         # Set a goal location
         goal_radius = 0.00001
@@ -359,17 +432,17 @@ def main(dataset):
             info={"sound": args.sound_name},
         )
 
-        if not args.visualize_mesh:
-            # Simulation configs including RGB sensor, depth sensor ...
-            episode_sim_config = merge_sim_episode_config(
-                config.TASK_CONFIG.SIMULATOR, episode
-            )
-            if simulator is None:
-                # simulator = Sim(episode_sim_config)
-                simulator = CustomSim(episode_sim_config)
-                simulator.reconfigure(episode_sim_config)
-
-        # breakpoint()
+        # Simulation configs including RGB sensor, depth sensor ...
+        episode_sim_config = merge_sim_episode_config(
+            config.TASK_CONFIG.SIMULATOR, episode
+        )
+        if simulator is None:
+            # simulator = Sim(episode_sim_config)
+            simulator = CustomSim(episode_sim_config)
+            simulator.reconfigure(episode_sim_config)
+            # Compute sensors' intrinsics
+            simulator.compute_rgb_intrinsics()
+            simulator.compute_depth_intrinsics()
         for node in graph.nodes():
             print(f"-------------------------------------------")
             # All rotation and position here are w.r.t the habitat's coordinate system which is
@@ -403,9 +476,7 @@ def main(dataset):
                     o3d_agent_pos.transform(agent2w_T)
 
                     # Update the visualization
-                    o3d_visualizer.update_geometry(o3d_agent_pos)
-                    o3d_visualizer.poll_events()
-                    o3d_visualizer.update_renderer()
+                    # o3d_visualizer.update_geometry(o3d_agent_pos)
 
                     # Transform back to 0,0,0. This is just for visualization purpose
                     o3d_agent_pos.transform(np.linalg.inv(agent2w_T))
@@ -414,7 +485,6 @@ def main(dataset):
                 """ Note that the audio is 1 second in length and binaural.
                     TODO: adjust this duration by changing
                         audiogoal = binaural_convolved[:, :sampling_rate] in soundspaces/simulator.py
-                    TODO: unnormalize the depth !!!
                 """
                 obs = simulator.get_observations_with_audiogoal_at(
                     agent_position, agent_rotation
@@ -422,11 +492,15 @@ def main(dataset):
                 rotation_index = simulator._rotation_angle
                 scene_obs[(node, rotation_index)] = obs
                 num_obs += 1
-                plt.imshow(obs["depth"])
-                plt.show()
 
                 # Convert the observation to an image frame for demo videos
                 frame = convert_observation_to_frame(obs)
+
+                # Store
+                # TODO: continuous view
+                for _ in range(args.fps):
+                    scene_frames.append(frame)
+                scene_audios.append(obs["audio"])
 
                 # Debug the observation
                 if args.visualize_obs:
@@ -435,11 +509,23 @@ def main(dataset):
                     key = cv2.waitKey(1)
                     if key == ord("q"):
                         break
-                # Store
-                # TODO: continuous view
-                for _ in range(args.fps):
-                    scene_frames.append(frame)
-                scene_audios.append(obs["audio"])
+
+                # Get sensors' states. Here, assume RGB and depth sensors are already aligned
+                sim_cur_state = simulator.get_agent_state()
+                rgbd_sstate = sim_cur_state.sensor_states[
+                    "rgb"
+                ]  # To access rotation, position, do: rgb_state.position, rgb_state.rotation
+
+                if args.visualize_mesh:
+                    o3d_new_pcl = simulator.transform_rgbd_to_world_pcl(
+                        hat2w_T,
+                        obs["rgb"],
+                        obs["depth"],
+                        rgbd_sstate.position,
+                        list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
+                        # for some reasons, this quaternion is given in the scalar-first format
+                    )
+                    o3d.visualization.draw_geometries([map_mesh, o3d_new_pcl])
 
         print(f"-----------------------------------------------")
         print("Total number of observations: {}".format(num_obs))
