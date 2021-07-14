@@ -34,51 +34,11 @@ import open3d as o3d
 from utils.rgbds_simulator import CustomSim
 from utils.rgbds_simulator import global_hat2W_T
 from utils.observations_conversion import convert_observation_to_frame
+from utils.get_rgbds_options import get_args
 
 
 def main(dataset):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config-path",
-        type=str,
-        default="ss_baselines/av_nav/config/audionav/{}/train_telephone/pointgoal_rgb.yaml".format(
-            dataset
-        ),
-    )
-    parser.add_argument(
-        "opts",
-        default=None,
-        nargs=argparse.REMAINDER,
-        help="Modify config options from command line",
-    )
-    parser.add_argument(
-        "--fps", default=30, type=int, help="Simulation FPS",
-    )
-    parser.add_argument(
-        "--scene",
-        type=str,
-        default="room_0",
-        help="Name of a specific scene that you want to extract RGB-S. If not given, all scenes given in data/metadata will be used!",
-    )
-    parser.add_argument(
-        "--sound_name",
-        type=str,
-        default="person_10",
-        help="The name of the sound source file (without the extension)",
-    )
-    parser.add_argument(
-        "--visualize_mesh", action="store_true", help="Visualize the 3D env pcl or not"
-    )
-    parser.add_argument(
-        "--visualize_obs", action="store_true", help="Visualize the observations or not"
-    )
-    parser.add_argument(
-        "--test_cv_K",
-        action="store_true",
-        help="Test intrinsics parameters given in OpenCV format",
-    )
-    args = parser.parse_args()
-
+    args = get_args(dataset)
     config = get_config(args.config_path, opts=args.opts)
     config.defrost()
     config.TASK_CONFIG.SIMULATOR.AGENT_0.SENSORS = ["RGB_SENSOR", "DEPTH_SENSOR"]
