@@ -91,10 +91,38 @@ def convert_observation_to_frame(
     return frame
 
 
+# Transformation from OpenCV cam to OpenGL cam (habitat-sim)
+global_cvCam_to_openglCam_T = np.array(
+    [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1],]
+)
+# By default, habitat uses a different convention for cartisian cordinate system
+# Transformation from the habitat-sim world to Open3D, OpenCV world
+global_hat2W_T = np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1],])
+
+
 class CustomSim(SoundSpacesSim):
+    def get_opencvCam_to_world_transformation(self, cam_position, cam_quat):
+        """
+        @Brief: get the transformation from the OpenCV camera to the world (in computer vision convention)
+        Note that in the OpenGL camera's coord, Y is upward, X is to the right, and Z is backward
+             while in the OpenCV camera's coord, Y is downward,  X is to the right, and Z is forward.
+             while what we're provided from the Replica dataset is w.r.t the OpenGL camera's coord.
+        @Args:
+            - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
+            - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
+                the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
+        """
+        openglCam_rotation_mat = scipy.spatial.transform.Rotation.from_quat(
+            cam_quat
+        ).as_matrix()
+        openglCam_2hat_T = np.column_stack((openglCam_rotation_mat, cam_position))
+        openglCam_2hat_T = np.vstack((openglCam_2hat_T, (0, 0, 0, 1)))
+        cvCam2W_T = global_hat2W_T @ openglCam_2hat_T @ global_cvCam_to_openglCam_T
+        return cvCam2W_T
+
     # It really depends on ...
     def transform_rgbd_to_world_pcl_openCV_convention(
-        self, cv_K, hat2w_T, rgb, depth, cam_position=None, cam_quat=None
+        self, cv_K, rgb, depth, cam_position=None, cam_quat=None
     ):
         """
         @Brief: This is a depricated function used to test the intrinsics matrix in OpenCV format.
@@ -105,16 +133,10 @@ class CustomSim(SoundSpacesSim):
         Make sure depth is already aligned in the rgb frame
         @Args:
             - cv_K (np.ndarray, 4x4): intrinsics parameters in OpenCV format
-            - hat2w_T (np.ndarray, 4x4): transformation from habitat-sim to open3d
             - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
             - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
                 the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
         """
-        # Transformation from OpenCV cam to OpenGL cam (habitat-sim)
-        cvCam_to_openglCam_T = np.array(
-            [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1],]
-        )
-
         # Get 3D points in the OpenCV camera's coord
         depth = depth.squeeze()[None]  # 1 x H x W
         img_h, img_w = rgb.shape[:2]
@@ -133,28 +155,19 @@ class CustomSim(SoundSpacesSim):
         pcl_points = xy_c0[:3, :].T
         pcl_cam = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pcl_points))
 
-        openglCam_rotation_mat = scipy.spatial.transform.Rotation.from_quat(
-            cam_quat
-        ).as_matrix()
-        openglCam_2hat_T = np.column_stack((openglCam_rotation_mat, cam_position))
-        openglCam_2hat_T = np.vstack((openglCam_2hat_T, (0, 0, 0, 1)))
-
-        cvCam2w_T = hat2w_T @ openglCam_2hat_T @ cvCam_to_openglCam_T
-        # print(f"[Info] Angle {angle}, rot mat to habitat \n {agent2hat_T}")
-        # print(f"[Info] Angle {angle}, rot mat to world \n {agent2w_T}")
+        # Transformation from OpenCV camera to Open3D world
+        cvCam2W_T = self.get_opencvCam_to_world_transformation(cam_position, cam_quat)
 
         # Transform the (0,0,0) coordinate frame to obtain that of the aagent w.r.t the o3d's coord system
-        pcl_cam.transform(cvCam2w_T)
+        pcl_cam.transform(cvCam2W_T)
         return pcl_cam
 
-    def transform_rgbd_to_world_pcl(
-        self, hat2w_T, rgb, depth, cam_position=None, cam_quat=None
-    ):
+    def transform_rgbd_to_world_pcl(self, rgb, depth, cam_position=None, cam_quat=None):
         """
         @Brief: transform RGBD to pointcloud in the world's coord
         Make sure depth is already aligned in the rgb frame
         @Args:
-            - hat2w_T (np.ndarray, 4x4): transformation from habitat-sim to open3d
+            - global_hat2W_T (np.ndarray, 4x4): transformation from habitat-sim to open3d
             - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
             - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
                 the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
@@ -184,7 +197,7 @@ class CustomSim(SoundSpacesSim):
         ).as_matrix()
         cam_2hat_T = np.column_stack((cam_rotation_mat, cam_position))
         cam_2hat_T = np.vstack((cam_2hat_T, (0, 0, 0, 1)))
-        cam2w_T = hat2w_T @ cam_2hat_T
+        cam2w_T = global_hat2W_T @ cam_2hat_T
         # print(f"[Info] Angle {angle}, rot mat to habitat \n {agent2hat_T}")
         # print(f"[Info] Angle {angle}, rot mat to world \n {agent2w_T}")
 
@@ -470,9 +483,6 @@ def main(dataset):
                 "data/scene_datasets", dataset, scene, scene + ".glb"
             )
 
-        # By default, habitat uses a different convention for cartisian cordinate system
-        hat2w_T = np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1],])
-
         # Visualize the env
         if args.visualize_mesh:
             # Map pointcloud
@@ -551,7 +561,7 @@ def main(dataset):
                     ).as_matrix()
                     agent2hat_T = np.column_stack((agent_rot_mat, agent_position))
                     agent2hat_T = np.vstack((agent2hat_T, (0, 0, 0, 1)))
-                    agent2w_T = hat2w_T @ agent2hat_T
+                    agent2w_T = global_hat2W_T @ agent2hat_T
                     # print(f"[Info] Angle {angle}, rot mat to habitat \n {agent2hat_T}")
                     # print(f"[Info] Angle {angle}, rot mat to world \n {agent2w_T}")
 
@@ -573,6 +583,24 @@ def main(dataset):
                     agent_position, agent_rotation
                 )
                 rotation_index = simulator._rotation_angle
+
+                # Get sensors' states (in the habitat-sim world). Here, assume RGB and depth sensors are already aligned
+                sim_cur_state = simulator.get_agent_state()
+                rgbd_sstate = sim_cur_state.sensor_states[
+                    "rgb"
+                ]  # To access rotation, position, do: rgb_state.position, rgb_state.rotation
+
+                # Get the camera's intrinsics parameters
+                obs["cv_K"] = simulator.cv_rgb_intrinsics  # 4x4
+                obs["gl_K"] = simulator.rgb_intrinsics  # 4x4
+
+                # Get the transformation from OpenCV's camera to the world (opencv cam -> opengl cam ---
+                # --> habitat-sim world -> opencv (open3d, our computer vision) world)
+                obs["cvCam2W_T"] = simulator.get_opencvCam_to_world_transformation(
+                    rgbd_sstate.position,
+                    list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
+                )
+
                 scene_obs[(node, rotation_index)] = obs
                 num_obs += 1
 
@@ -593,18 +621,11 @@ def main(dataset):
                     if key == ord("q"):
                         break
 
-                # Get sensors' states. Here, assume RGB and depth sensors are already aligned
-                sim_cur_state = simulator.get_agent_state()
-                rgbd_sstate = sim_cur_state.sensor_states[
-                    "rgb"
-                ]  # To access rotation, position, do: rgb_state.position, rgb_state.rotation
-
                 if args.visualize_mesh:
                     if args.test_cv_K:
                         print(f"[Info] CV RGB K: \n {simulator.cv_rgb_intrinsics}")
                         o3d_new_pcl = simulator.transform_rgbd_to_world_pcl_openCV_convention(
                             simulator.cv_rgb_intrinsics,
-                            hat2w_T,
                             obs["rgb"],
                             obs["depth"],
                             rgbd_sstate.position,
@@ -613,7 +634,6 @@ def main(dataset):
                         )
                     else:
                         o3d_new_pcl = simulator.transform_rgbd_to_world_pcl(
-                            hat2w_T,
                             obs["rgb"],
                             obs["depth"],
                             rgbd_sstate.position,
