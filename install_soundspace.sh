@@ -38,17 +38,16 @@ git checkout v0.1.7
 pip install -r requirements.txt
 python setup.py install
 
+cd ../
 # Install challenge specific habitat-lab
 git clone --branch stable https://github.com/facebookresearch/habitat-lab.git
 #/bin/bash -c ". activate soundspaces; cd habitat-lab; git checkout v0.1.7; pip install -e ."
 cd habitat-lab; git checkout v0.1.7; pip install -e .
 
 # Install challenge specific habitat-lab
-pwd
+cd ../
 git clone --branch master https://github.com/facebookresearch/sound-spaces.git
 cd sound-spaces
-#git checkout v0.1.2
-#/bin/bash -c ". activate soundspaces; cd sound-spaces;pip install -e ."
 pip install -e .
 # Silence habitat-sim logs
 export GLOG_minloglevel=2
