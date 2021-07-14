@@ -92,6 +92,61 @@ def convert_observation_to_frame(
 
 
 class CustomSim(SoundSpacesSim):
+    # It really depends on ...
+    def transform_rgbd_to_world_pcl_openCV_convention(
+        self, cv_K, hat2w_T, rgb, depth, cam_position=None, cam_quat=None
+    ):
+        """
+        @Brief: This is a depricated function used to test the intrinsics matrix in OpenCV format.
+        Note that in the OpenGL camera's coord, Y is upward, X is to the right, and Z is backward
+             while in the OpenCV camera's coord, Y is downward,  X is to the right, and Z is forward.
+             while what we're provided from the Replica dataset is w.r.t the OpenGL camera's coord.
+        Transform RGBD to pointcloud in the world's coord. This function makes use of an intrinsics matrix (OpenCV format)
+        Make sure depth is already aligned in the rgb frame
+        @Args:
+            - cv_K (np.ndarray, 4x4): intrinsics parameters in OpenCV format
+            - hat2w_T (np.ndarray, 4x4): transformation from habitat-sim to open3d
+            - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
+            - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
+                the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
+        """
+        # Transformation from OpenCV cam to OpenGL cam (habitat-sim)
+        cvCam_to_openglCam_T = np.array(
+            [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1],]
+        )
+
+        # Get 3D points in the OpenCV camera's coord
+        depth = depth.squeeze()[None]  # 1 x H x W
+        img_h, img_w = rgb.shape[:2]
+        xs, ys = np.meshgrid(
+            np.linspace(0, img_w - 1, img_w), np.linspace(0, img_h - 1, img_h),
+        )
+        xs = xs.reshape(1, img_h, img_w)
+        ys = ys.reshape(1, img_h, img_w)
+
+        # Unproject (OpenCV camera's coordinate)
+        xys = np.vstack((xs * depth, ys * depth, depth, np.ones(depth.shape)))
+        xys = xys.reshape(4, -1)
+        xy_c0 = np.matmul(np.linalg.inv(cv_K), xys)
+
+        # Visualize the points
+        pcl_points = xy_c0[:3, :].T
+        pcl_cam = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pcl_points))
+
+        openglCam_rotation_mat = scipy.spatial.transform.Rotation.from_quat(
+            cam_quat
+        ).as_matrix()
+        openglCam_2hat_T = np.column_stack((openglCam_rotation_mat, cam_position))
+        openglCam_2hat_T = np.vstack((openglCam_2hat_T, (0, 0, 0, 1)))
+
+        cvCam2w_T = hat2w_T @ openglCam_2hat_T @ cvCam_to_openglCam_T
+        # print(f"[Info] Angle {angle}, rot mat to habitat \n {agent2hat_T}")
+        # print(f"[Info] Angle {angle}, rot mat to world \n {agent2w_T}")
+
+        # Transform the (0,0,0) coordinate frame to obtain that of the aagent w.r.t the o3d's coord system
+        pcl_cam.transform(cvCam2w_T)
+        return pcl_cam
+
     def transform_rgbd_to_world_pcl(
         self, hat2w_T, rgb, depth, cam_position=None, cam_quat=None
     ):
@@ -149,13 +204,25 @@ class CustomSim(SoundSpacesSim):
         fy = 1.0 / np.tan(vfov / 2.0)
         K = np.array(
             [
-                [fx, 0.0, 0.0, 0.0],
-                [0.0, fy, 0.0, 0.0],
+                [fx, 0.0, 0, 0.0],
+                [0.0, fy, 0, 0.0],
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0],
             ]
         )
+
+        # Intrinsics in OpenGL format
         self.rgb_intrinsics = K
+
+        # Compute intrinsics parameters in OpenCV format
+        self.cv_rgb_intrinsics = np.array(
+            [
+                [fx * w / 2.0, 0.0, w / 2, 0.0],
+                [0.0, fy * h / 2.0, h / 2, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
 
     def compute_depth_intrinsics(self):
         """
@@ -175,7 +242,18 @@ class CustomSim(SoundSpacesSim):
                 [0.0, 0.0, 0.0, 1.0],
             ]
         )
+        # Intrinsics in OpenGL format
         self.depth_intrinsics = K
+
+        # Compute intrinsics parameters in OpenCV format
+        self.cv_depth_intrinsics = np.array(
+            [
+                [fx * w / 2.0, 0.0, w / 2, 0],
+                [0.0, fy * h / 2.0, h / 2, 0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
 
     def convert_position_to_index(self, position: List) -> int:
         return self._position_to_index_mapping[self.position_encoding(position)]
@@ -323,6 +401,11 @@ def main(dataset):
     )
     parser.add_argument(
         "--visualize_obs", action="store_true", help="Visualize the observations or not"
+    )
+    parser.add_argument(
+        "--test_cv_K",
+        action="store_true",
+        help="Test intrinsics parameters given in OpenCV format",
     )
     args = parser.parse_args()
 
@@ -517,14 +600,26 @@ def main(dataset):
                 ]  # To access rotation, position, do: rgb_state.position, rgb_state.rotation
 
                 if args.visualize_mesh:
-                    o3d_new_pcl = simulator.transform_rgbd_to_world_pcl(
-                        hat2w_T,
-                        obs["rgb"],
-                        obs["depth"],
-                        rgbd_sstate.position,
-                        list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
-                        # for some reasons, this quaternion is given in the scalar-first format
-                    )
+                    if args.test_cv_K:
+                        print(f"[Info] CV RGB K: \n {simulator.cv_rgb_intrinsics}")
+                        o3d_new_pcl = simulator.transform_rgbd_to_world_pcl_openCV_convention(
+                            simulator.cv_rgb_intrinsics,
+                            hat2w_T,
+                            obs["rgb"],
+                            obs["depth"],
+                            rgbd_sstate.position,
+                            list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
+                            # for some reasons, this quaternion is given in the scalar-first format
+                        )
+                    else:
+                        o3d_new_pcl = simulator.transform_rgbd_to_world_pcl(
+                            hat2w_T,
+                            obs["rgb"],
+                            obs["depth"],
+                            rgbd_sstate.position,
+                            list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
+                            # for some reasons, this quaternion is given in the scalar-first format
+                        )
                     o3d.visualization.draw_geometries([map_mesh, o3d_new_pcl])
 
         print(f"-----------------------------------------------")

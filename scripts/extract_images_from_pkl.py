@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import os, cv2
 
 pkl_file = "data/scene_RGBS/replica/room_0/room_0.pkl"
-rgb_root = "data/scene_colmaps/replica/room_0/output_images"
+rgb_root = "data/scene_colmaps/replica/room_0/images"
 if not os.path.exists(rgb_root):
     os.makedirs(rgb_root, exist_ok=True)
 
@@ -20,5 +20,5 @@ with open(pkl_file, "rb") as fo:
 for (node, rotation_index), obs in observations.items():
     print(f"[Info] node index {node}, rotation ind {rotation_index}")
     rgb = obs["rgb"]
-    rgb_file = os.path.join(rgb_root, f"node_{node}_rotation_{rotation_index}.jpg")
+    rgb_file = os.path.join(rgb_root, f"node_{node}_rotation_{rotation_index}.jpeg")
     cv2.imwrite(rgb_file, rgb[:, :, ::-1])
