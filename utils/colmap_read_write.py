@@ -1,54 +1,242 @@
-# Copyright (c) 2018, ETH Zurich and UNC Chapel Hill.
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#     * Redistributions of source code must retain the above copyright
-#       notice, this list of conditions and the following disclaimer.
-#
-#     * Redistributions in binary form must reproduce the above copyright
-#       notice, this list of conditions and the following disclaimer in the
-#       documentation and/or other materials provided with the distribution.
-#
-#     * Neither the name of ETH Zurich and UNC Chapel Hill nor the names of
-#       its contributors may be used to endorse or promote products derived
-#       from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-#
-# Author: Johannes L. Schoenberger (jsch-at-demuc-dot-de)
+"""
+@Brief: A wrapper to log colmap data to files. This is modified from read_write.py in colmap/python
+@Author: Ty Nguyen
+@Email: tynguyen@seas.upenn.edu
+"""
 
-import os
+import os, cv2
 import collections
+
+import soundfile
+from soundspaces.mp3d_utils import Object
 import numpy as np
 import struct
 import argparse
-
+import pickle
+from shutil import copyfile
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"]
 )
-Camera = collections.namedtuple("Camera", ["id", "model", "width", "height", "params"])
-BaseImage = collections.namedtuple(
-    "Image", ["id", "qvec", "tvec", "camera_id", "name", "xys", "point3D_ids"]
-)
-Point3D = collections.namedtuple(
-    "Point3D", ["id", "xyz", "rgb", "error", "image_ids", "point2D_idxs"]
+Camera = collections.namedtuple("Camera", ["id", "model", "width", "height", "params"],)
+MyBaseImage = collections.namedtuple(
+    "Image",
+    [
+        "id",
+        "qvec",
+        "tvec",
+        "camera_id",
+        "name",
+        "xys",
+        "point3D_ids",
+        "near_distance",
+        "far_distance",
+    ],
 )
 
 
-class Image(BaseImage):
+class ColmapDataWriter(Object):
+    def __init__(self, data_root, audio_sample_rate=44100, ext=".txt"):
+        """
+        @Brief: a wrapper for Colmap data writer.
+                Data will be written to images{ext}, cameras{ext}
+
+        @Args:
+            - data_root (str): absolute path to the repo we're storing the data
+            - ext (str): file extension i.e: ".txt" or ".bin"
+        """
+        print(f"[Info] ColmapDataWriter")
+        self.cameras = {}
+        # Colmap Image instances
+        self.images = {}
+
+        # Rgb images
+        self.rgb_images = {}
+        self.rgb_root = os.path.join(data_root, "images")
+        # Depth images
+        self.depth_images = {}
+        self.depth_root = os.path.join(data_root, "depths")
+        # Audio responses
+        self.audios = {}
+        self.audio_root = os.path.join(data_root, "audios")
+        self.audio_sample_rate = audio_sample_rate
+        # Room impulse responses
+        self.rirs = {}
+        self.rir_root = os.path.join(data_root, "rirs")
+
+        # Root to colmap data
+        self.colmap_root = os.path.join(data_root, "map")
+        self.ext = ext
+
+        # Create repos
+        os.makedirs(self.rgb_root, exist_ok=True)
+        os.makedirs(self.depth_root, exist_ok=True)
+        os.makedirs(self.audio_root, exist_ok=True)
+        os.makedirs(self.rir_root, exist_ok=True)
+        os.makedirs(self.colmap_root, exist_ok=True)
+
+    def _form_a_camera(self, model, camera_id, width, height, params):
+        """
+        @Brief: return a Camera instance with the format
+            Camera(
+                id=camera_id, model=model, width=width, height=height, params=params
+            )
+        """
+        return Camera(
+            id=camera_id, model=model, width=width, height=height, params=params
+        )
+
+    def add_camera(self, model, camera_id, width, height, params):
+        """
+        @Brief: add a Camera to self.cameras given its set of values
+        """
+        self.cameras[camera_id] = self._form_a_camera(
+            model, camera_id, width, height, params
+        )
+
+    def _form_an_image(
+        self,
+        image_id,
+        qvec,
+        tvec,
+        camera_id,
+        image_name,
+        xys,
+        near_distance,
+        far_distance,
+    ):
+        """
+        @Brief: return a Image instance with the format
+            MyImage(
+                    id=image_id,
+                    qvec=qvec,
+                    tvec=tvec,
+                    camera_id=camera_id,
+                    name=image_name,
+                    xys=xys,
+                    near_distance=near_distance,
+                    far_distance=far_distance,
+                )
+        """
+        return MyImage(
+            id=image_id,
+            qvec=qvec,
+            tvec=tvec,
+            camera_id=camera_id,
+            name=image_name,
+            xys=xys,
+            near_distance=near_distance,
+            far_distance=far_distance,
+            point3D_ids=None,
+        )
+
+    def add_colmap_image(self, image_id, colmap_image_instance):
+        """
+        @Brief: add an Image instance with the format
+            colmap_image_instace = MyImage(
+                    id=image_id,
+                    qvec=qvec,
+                    tvec=tvec,
+                    camera_id=camera_id,
+                    name=image_name,
+                    xys=xys,
+                    near_distance=near_distance,
+                    far_distance=far_distance,
+                )
+            to self.images
+        """
+        self.images[image_id] = colmap_image_instance
+
+    def add_colmap_image_from_raw_data(
+        self,
+        image_id,
+        qvec,
+        tvec,
+        camera_id,
+        image_name,
+        xys,
+        near_distance,
+        far_distance,
+    ):
+        """
+        @Brief: add an Image instance with the format
+            MyImage(
+                    id=image_id,
+                    qvec=qvec,
+                    tvec=tvec,
+                    camera_id=camera_id,
+                    name=image_name,
+                    xys=xys,
+                    near_distance=near_distance,
+                    far_distance=far_distance,
+                )
+            to self.images
+        """
+        self.images[image_id] = self._form_an_image(
+            image_id,
+            qvec,
+            tvec,
+            camera_id,
+            image_name,
+            xys,
+            near_distance,
+            far_distance,
+        )
+
+    def write_colmap_data_to_files(self, ext=None):
+        """
+        @Brief: write colmap data to files
+        """
+        if self.ext is None or ext is not None:
+            self.ext = ext
+        if self.ext is None:
+            self.ext = ".txt"
+        elif self.ext not in [".txt", ".bin"]:
+            raise (
+                f"[Error] Given extension {self.ext} is not supported. Only support .txt or .bin"
+            )
+
+        write_model(self.cameras, self.images, self.colmap_root, self.ext)
+
+    def add_rgb_image(self, image_file, obs):
+        self.rgb_images[image_file] = obs["rgb"][:, :, ::-1]  # Convert RGB to GBR
+
+    def add_depth_image(self, image_file, obs):
+        self.depth_images[image_file] = obs["depth"]
+
+    def add_audio_response(self, audio_file, obs):
+        self.audios[audio_file] = obs["audio"]
+
+    def add_rir_file(self, rir_file, obs):
+        self.rirs[rir_file] = obs["rir_file"]
+
+    def write_rgbds_data_to_files(self):
+        for image_file in self.rgb_images:
+            cv2.imwrite(
+                os.path.join(self.rgb_root, image_file), self.rgb_images[image_file]
+            )
+        for image_file in self.depth_images:
+            float32_depth = self.depth_images[image_file]
+            # Convert to uint16 with milimetter as the new unit
+            uint16_depth = (float32_depth * 1000).astype(np.uint16)
+            cv2.imwrite(os.path.join(self.depth_root, image_file), uint16_depth)
+
+        for rir_file in self.rirs:
+            copyfile(self.rirs[rir_file], os.path.join(self.rir_root, rir_file))
+
+        for audio_file in self.audios:
+            soundfile.write(
+                os.path.join(self.audio_root, audio_file),
+                self.audios[audio_file].transpose(1, 0),
+                samplerate=self.audio_sample_rate,
+            )
+
+    def write_data_to_pickle_file(self, data, scene_obs_file):
+        with open(scene_obs_file, "wb") as fo:
+            pickle.dump(data, fo)
+
+
+class MyImage(MyBaseImage):
     def qvec2rotmat(self):
         return qvec2rotmat(self.qvec)
 
@@ -180,23 +368,6 @@ def write_cameras_text(cameras, path):
             fid.write(line + "\n")
 
 
-def write_cameras_binary(cameras, path_to_model_file):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::WriteCamerasBinary(const std::string& path)
-        void Reconstruction::ReadCamerasBinary(const std::string& path)
-    """
-    with open(path_to_model_file, "wb") as fid:
-        write_next_bytes(fid, len(cameras), "Q")
-        for _, cam in cameras.items():
-            model_id = CAMERA_MODEL_NAMES[cam.model].model_id
-            camera_properties = [cam.id, model_id, cam.width, cam.height]
-            write_next_bytes(fid, camera_properties, "iiQQ")
-            for p in cam.params:
-                write_next_bytes(fid, float(p), "d")
-    return cameras
-
-
 def read_images_text(path):
     """
     see: src/base/reconstruction.cc
@@ -222,7 +393,7 @@ def read_images_text(path):
                     [tuple(map(float, elems[0::3])), tuple(map(float, elems[1::3]))]
                 )
                 point3D_ids = np.array(tuple(map(int, elems[2::3])))
-                images[image_id] = Image(
+                images[image_id] = MyImage(
                     id=image_id,
                     qvec=qvec,
                     tvec=tvec,
@@ -268,7 +439,7 @@ def read_images_binary(path_to_model_file):
                 [tuple(map(float, x_y_id_s[0::3])), tuple(map(float, x_y_id_s[1::3]))]
             )
             point3D_ids = np.array(tuple(map(int, x_y_id_s[2::3])))
-            images[image_id] = Image(
+            images[image_id] = MyImage(
                 id=image_id,
                 qvec=qvec,
                 tvec=tvec,
@@ -289,13 +460,10 @@ def write_images_text(images, path):
     if len(images) == 0:
         mean_observations = 0
     else:
-        mean_observations = sum(
-            (len(img.point3D_ids) for _, img in images.items())
-        ) / len(images)
+        mean_observations = 0
     HEADER = (
         "# Image list with two lines of data per image:\n"
         + "#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n"
-        + "#   POINTS2D[] as (X, Y, POINT3D_ID)\n"
         + "# Number of images: {}, mean observations per image: {}\n".format(
             len(images), mean_observations
         )
@@ -309,157 +477,12 @@ def write_images_text(images, path):
             fid.write(first_line + "\n")
 
             points_strings = []
-            for xy, point3D_id in zip(img.xys, img.point3D_ids):
-                points_strings.append(" ".join(map(str, [*xy, point3D_id])))
             fid.write(" ".join(points_strings) + "\n")
 
 
-def write_images_binary(images, path_to_model_file):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::ReadImagesBinary(const std::string& path)
-        void Reconstruction::WriteImagesBinary(const std::string& path)
-    """
-    with open(path_to_model_file, "wb") as fid:
-        write_next_bytes(fid, len(images), "Q")
-        for _, img in images.items():
-            write_next_bytes(fid, img.id, "i")
-            write_next_bytes(fid, img.qvec.tolist(), "dddd")
-            write_next_bytes(fid, img.tvec.tolist(), "ddd")
-            write_next_bytes(fid, img.camera_id, "i")
-            for char in img.name:
-                write_next_bytes(fid, char.encode("utf-8"), "c")
-            write_next_bytes(fid, b"\x00", "c")
-            write_next_bytes(fid, len(img.point3D_ids), "Q")
-            for xy, p3d_id in zip(img.xys, img.point3D_ids):
-                write_next_bytes(fid, [*xy, p3d_id], "ddq")
-
-
-def read_points3D_text(path):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::ReadPoints3DText(const std::string& path)
-        void Reconstruction::WritePoints3DText(const std::string& path)
-    """
-    points3D = {}
-    with open(path, "r") as fid:
-        while True:
-            line = fid.readline()
-            if not line:
-                break
-            line = line.strip()
-            if len(line) > 0 and line[0] != "#":
-                elems = line.split()
-                point3D_id = int(elems[0])
-                xyz = np.array(tuple(map(float, elems[1:4])))
-                rgb = np.array(tuple(map(int, elems[4:7])))
-                error = float(elems[7])
-                image_ids = np.array(tuple(map(int, elems[8::2])))
-                point2D_idxs = np.array(tuple(map(int, elems[9::2])))
-                points3D[point3D_id] = Point3D(
-                    id=point3D_id,
-                    xyz=xyz,
-                    rgb=rgb,
-                    error=error,
-                    image_ids=image_ids,
-                    point2D_idxs=point2D_idxs,
-                )
-    return points3D
-
-
-def read_points3D_binary(path_to_model_file):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::ReadPoints3DBinary(const std::string& path)
-        void Reconstruction::WritePoints3DBinary(const std::string& path)
-    """
-    points3D = {}
-    with open(path_to_model_file, "rb") as fid:
-        num_points = read_next_bytes(fid, 8, "Q")[0]
-        for _ in range(num_points):
-            binary_point_line_properties = read_next_bytes(
-                fid, num_bytes=43, format_char_sequence="QdddBBBd"
-            )
-            point3D_id = binary_point_line_properties[0]
-            xyz = np.array(binary_point_line_properties[1:4])
-            rgb = np.array(binary_point_line_properties[4:7])
-            error = np.array(binary_point_line_properties[7])
-            track_length = read_next_bytes(fid, num_bytes=8, format_char_sequence="Q")[
-                0
-            ]
-            track_elems = read_next_bytes(
-                fid,
-                num_bytes=8 * track_length,
-                format_char_sequence="ii" * track_length,
-            )
-            image_ids = np.array(tuple(map(int, track_elems[0::2])))
-            point2D_idxs = np.array(tuple(map(int, track_elems[1::2])))
-            points3D[point3D_id] = Point3D(
-                id=point3D_id,
-                xyz=xyz,
-                rgb=rgb,
-                error=error,
-                image_ids=image_ids,
-                point2D_idxs=point2D_idxs,
-            )
-    return points3D
-
-
-def write_points3D_text(points3D, path):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::ReadPoints3DText(const std::string& path)
-        void Reconstruction::WritePoints3DText(const std::string& path)
-    """
-    if len(points3D) == 0:
-        mean_track_length = 0
-    else:
-        mean_track_length = sum(
-            (len(pt.image_ids) for _, pt in points3D.items())
-        ) / len(points3D)
-    HEADER = (
-        "# 3D point list with one line of data per point:\n"
-        + "#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n"
-        + "# Number of points: {}, mean track length: {}\n".format(
-            len(points3D), mean_track_length
-        )
-    )
-
-    with open(path, "w") as fid:
-        fid.write(HEADER)
-        for _, pt in points3D.items():
-            point_header = [pt.id, *pt.xyz, *pt.rgb, pt.error]
-            fid.write(" ".join(map(str, point_header)) + " ")
-            track_strings = []
-            for image_id, point2D in zip(pt.image_ids, pt.point2D_idxs):
-                track_strings.append(" ".join(map(str, [image_id, point2D])))
-            fid.write(" ".join(track_strings) + "\n")
-
-
-def write_points3D_binary(points3D, path_to_model_file):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::ReadPoints3DBinary(const std::string& path)
-        void Reconstruction::WritePoints3DBinary(const std::string& path)
-    """
-    with open(path_to_model_file, "wb") as fid:
-        write_next_bytes(fid, len(points3D), "Q")
-        for _, pt in points3D.items():
-            write_next_bytes(fid, pt.id, "Q")
-            write_next_bytes(fid, pt.xyz.tolist(), "ddd")
-            write_next_bytes(fid, pt.rgb.tolist(), "BBB")
-            write_next_bytes(fid, pt.error, "d")
-            track_length = pt.image_ids.shape[0]
-            write_next_bytes(fid, track_length, "Q")
-            for image_id, point2D_id in zip(pt.image_ids, pt.point2D_idxs):
-                write_next_bytes(fid, [image_id, point2D_id], "ii")
-
-
 def detect_model_format(path, ext):
-    if (
-        os.path.isfile(os.path.join(path, "cameras" + ext))
-        and os.path.isfile(os.path.join(path, "images" + ext))
-        and os.path.isfile(os.path.join(path, "points3D" + ext))
+    if os.path.isfile(os.path.join(path, "cameras" + ext)) and os.path.isfile(
+        os.path.join(path, "images" + ext)
     ):
         print("Detected model format: '" + ext + "'")
         return True
@@ -481,66 +504,19 @@ def read_model(path, ext=""):
     if ext == ".txt":
         cameras = read_cameras_text(os.path.join(path, "cameras" + ext))
         images = read_images_text(os.path.join(path, "images" + ext))
-        points3D = read_points3D_text(os.path.join(path, "points3D") + ext)
     else:
         cameras = read_cameras_binary(os.path.join(path, "cameras" + ext))
         images = read_images_binary(os.path.join(path, "images" + ext))
-        points3D = read_points3D_binary(os.path.join(path, "points3D") + ext)
-    return cameras, images, points3D
+    return cameras, images
 
 
-def write_model(cameras, images, points3D, path, ext=".bin"):
+def write_model(cameras, images, path, ext=".txt"):
     if ext == ".txt":
         write_cameras_text(cameras, os.path.join(path, "cameras" + ext))
         write_images_text(images, os.path.join(path, "images" + ext))
-        write_points3D_text(points3D, os.path.join(path, "points3D") + ext)
     else:
-        write_cameras_binary(cameras, os.path.join(path, "cameras" + ext))
-        write_images_binary(images, os.path.join(path, "images" + ext))
-        write_points3D_binary(points3D, os.path.join(path, "points3D") + ext)
-    return cameras, images, points3D
-
-
-def qvec2rotmat(qvec):
-    return np.array(
-        [
-            [
-                1 - 2 * qvec[2] ** 2 - 2 * qvec[3] ** 2,
-                2 * qvec[1] * qvec[2] - 2 * qvec[0] * qvec[3],
-                2 * qvec[3] * qvec[1] + 2 * qvec[0] * qvec[2],
-            ],
-            [
-                2 * qvec[1] * qvec[2] + 2 * qvec[0] * qvec[3],
-                1 - 2 * qvec[1] ** 2 - 2 * qvec[3] ** 2,
-                2 * qvec[2] * qvec[3] - 2 * qvec[0] * qvec[1],
-            ],
-            [
-                2 * qvec[3] * qvec[1] - 2 * qvec[0] * qvec[2],
-                2 * qvec[2] * qvec[3] + 2 * qvec[0] * qvec[1],
-                1 - 2 * qvec[1] ** 2 - 2 * qvec[2] ** 2,
-            ],
-        ]
-    )
-
-
-def rotmat2qvec(R):
-    Rxx, Ryx, Rzx, Rxy, Ryy, Rzy, Rxz, Ryz, Rzz = R.flat
-    K = (
-        np.array(
-            [
-                [Rxx - Ryy - Rzz, 0, 0, 0],
-                [Ryx + Rxy, Ryy - Rxx - Rzz, 0, 0],
-                [Rzx + Rxz, Rzy + Ryz, Rzz - Rxx - Ryy, 0],
-                [Ryz - Rzy, Rzx - Rxz, Rxy - Ryx, Rxx + Ryy + Rzz],
-            ]
-        )
-        / 3.0
-    )
-    eigvals, eigvecs = np.linalg.eigh(K)
-    qvec = eigvecs[[3, 0, 1, 2], np.argmax(eigvals)]
-    if qvec[0] < 0:
-        qvec *= -1
-    return qvec
+        raise (f"[Error] Your extension is {ext}. Only Support .txt.")
+    return cameras, images
 
 
 def main():
@@ -563,16 +539,13 @@ def main():
     )
     args = parser.parse_args()
 
-    cameras, images, points3D = read_model(path=args.input_model, ext=args.input_format)
+    cameras, images = read_model(path=args.input_model, ext=args.input_format)
 
     print("num_cameras:", len(cameras))
     print("num_images:", len(images))
-    print("num_points3D:", len(points3D))
 
     if args.output_model is not None:
-        write_model(
-            cameras, images, points3D, path=args.output_model, ext=args.output_format
-        )
+        write_model(cameras, images, path=args.output_model, ext=args.output_format)
 
 
 if __name__ == "__main__":

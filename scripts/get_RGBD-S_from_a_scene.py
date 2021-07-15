@@ -6,9 +6,7 @@
 from typing import Dict, Any, List, Optional
 from abc import ABC
 import os
-import argparse
 import logging
-import pickle
 from collections import defaultdict
 from attr.setters import convert
 import matplotlib.pyplot as plt
@@ -35,10 +33,17 @@ from utils.rgbds_simulator import CustomSim
 from utils.rgbds_simulator import global_hat2W_T
 from utils.observations_conversion import convert_observation_to_frame
 from utils.get_rgbds_options import get_args
+from utils.colmap_read_write import ColmapDataWriter
 
 
 def main(dataset):
     args = get_args(dataset)
+    # Place to dump the RGB-S data
+    scene_obs_dir = os.path.join(args.data_saving_root, args.scene)
+    data_writer = ColmapDataWriter(
+        scene_obs_dir, audio_sample_rate=args.audio_sample_rate
+    )
+
     config = get_config(args.config_path, opts=args.opts)
     config.defrost()
     config.TASK_CONFIG.SIMULATOR.AGENT_0.SENSORS = ["RGB_SENSOR", "DEPTH_SENSOR"]
@@ -54,7 +59,7 @@ def main(dataset):
     config.TASK_CONFIG.SIMULATOR.RGB_SENSOR.WIDTH = 1280  # 256
     config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE = True
     config.TASK_CONFIG.SIMULATOR.VIEW_CHANGE_FPS = args.fps
-    config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE = 44100
+    config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE = args.audio_sample_rate
     config.TASK_CONFIG.SIMULATOR.AUDIO.SOURCE_SOUND_DIR = "data/sounds/1s_all"
 
     config.freeze()
@@ -62,9 +67,6 @@ def main(dataset):
     scene_obs = defaultdict(dict)
     num_obs = 0
 
-    # Place to dump the RGB-S data
-    scene_obs_dir = "data/scene_RGBS/" + dataset
-    os.makedirs(scene_obs_dir, exist_ok=True)
     metadata_dir = "data/metadata/" + dataset
 
     # Prepare to visualize the mesh
@@ -153,6 +155,7 @@ def main(dataset):
             # Compute sensors' intrinsics
             simulator.compute_rgb_intrinsics()
             simulator.compute_depth_intrinsics()
+
         for node in graph.nodes():
             print(f"-------------------------------------------")
             # All rotation and position here are w.r.t the habitat's coordinate system which is
@@ -215,7 +218,7 @@ def main(dataset):
                 # --> habitat-sim world -> opencv (open3d, our computer vision) world)
                 obs["cvCam2W_T"] = simulator.get_opencvCam_to_world_transformation(
                     rgbd_sstate.position,
-                    list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
+                    [rgbd_sstate.rotation.w] + list(rgbd_sstate.rotation.vec),
                 )
 
                 scene_obs[(node, rotation_index)] = obs
@@ -246,27 +249,68 @@ def main(dataset):
                             obs["rgb"],
                             obs["depth"],
                             rgbd_sstate.position,
-                            list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
-                            # for some reasons, this quaternion is given in the scalar-first format
+                            [rgbd_sstate.rotation.w] + list(rgbd_sstate.rotation.vec),
+                            # this quaternion is given in the scalar-first format
                         )
                     else:
-                        o3d_new_pcl = simulator.transform_rgbd_to_world_pcl(
-                            obs["rgb"],
-                            obs["depth"],
-                            rgbd_sstate.position,
-                            list(rgbd_sstate.rotation.vec) + [rgbd_sstate.rotation.w],
-                            # for some reasons, this quaternion is given in the scalar-first format
+                        o3d_new_pcl = (
+                            simulator.transform_rgbd_to_world_pcl(
+                                obs["rgb"],
+                                obs["depth"],
+                                rgbd_sstate.position,
+                                [rgbd_sstate.rotation.w]
+                                + list(rgbd_sstate.rotation.vec),
+                                # for some reasons, this quaternion is given in the scalar-first format
+                            ),
                         )
                     o3d.visualization.draw_geometries([map_mesh, o3d_new_pcl])
 
+                # Prepare data to save in the Colmap format (except no Point3D) and add near distance, far distance values to Camera instances
+                # TODO: for now, assume there is only a single camera.
+                camera_id = 0
+                data_writer.add_camera(
+                    model=simulator.colmap_pinhole_rgb_cam.model_name,
+                    camera_id=camera_id,
+                    width=simulator.colmap_pinhole_rgb_cam.width,
+                    height=simulator.colmap_pinhole_rgb_cam.height,
+                    params=simulator.colmap_pinhole_rgb_cam.params,
+                )
+
+                # Colmap Image
+                image_id = f"nodeID_{node}_angleID_{angle}"
+                colmap_image_instance = simulator.get_colmap_image_instance_from_observation(
+                    f"{image_id}.jpg",
+                    image_id,
+                    camera_id,
+                    obs,
+                    rgbd_sstate.position,
+                    [rgbd_sstate.rotation.w] + list(rgbd_sstate.rotation.vec),
+                )
+
+                data_writer.add_colmap_image(image_id, colmap_image_instance)
+
+                # RGBD-S data
+                data_writer.add_rgb_image(f"{image_id}.jpg", obs)
+                data_writer.add_depth_image(f"{image_id}.png", obs)
+                data_writer.add_audio_response(f"{image_id}.wav", obs)
+                data_writer.add_rir_file(f"{image_id}.wav", obs)
+
         print(f"-----------------------------------------------")
         print("Total number of observations: {}".format(num_obs))
-        scene_obs_file = os.path.join(scene_obs_dir, scene, "{}.pkl".format(scene))
-        with open(scene_obs_file, "wb") as fo:
-            pickle.dump(scene_obs, fo)
-        print(
-            f"[Info] Saved data simulated from scene {args.scene} to\n {scene_obs_file}"
-        )
+        # scene_obs_pkl_file = os.path.join(scene_obs_dir, "{}.pkl".format(scene))
+        # Simply dumpe the data to a pickle file
+        # data_writer.write_data_to_pickle_file(scene_obs, scene_obs_pkl_file)
+        # print(
+        #     f"[Info] Saved data simulated from scene {args.scene} to\n {scene_obs_pkl_file}"
+        # )
+
+        # Write colmap data
+        data_writer.write_colmap_data_to_files(".txt")
+        print(f"[Info] Saved colmap data from scene {args.scene} to\n {scene_obs_dir}")
+
+        # Write RGB-S data
+        data_writer.write_rgbds_data_to_files()
+        print(f"[Info] Saved RGBD-S data from scene {args.scene} to\n {scene_obs_dir}")
 
         # Save images & audios to a video
         # Place to dump the demo video

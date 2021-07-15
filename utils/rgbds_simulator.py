@@ -1,5 +1,6 @@
+import os
+import collections
 import numpy as np
-import scipy
 import open3d as o3d
 from typing import Dict, Any, List, Optional
 from soundspaces.simulator import SoundSpacesSim
@@ -18,6 +19,14 @@ from habitat_sim.utils.common import (
     quat_from_coeffs,
 )
 
+from utils.transformations import qvec2rotmat
+from utils.transformations import rotmat2qvec
+from utils.colmap_read_write import MyImage
+
+Pinhole_cam = collections.namedtuple(
+    "pinhole_cam", ["model_name", "width", "height", "params"]
+)
+
 # Transformation from OpenCV cam to OpenGL cam (habitat-sim)
 global_cvCam_to_openglCam_T = np.array(
     [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1],]
@@ -28,6 +37,44 @@ global_hat2W_T = np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 
 
 
 class CustomSim(SoundSpacesSim):
+    def get_colmap_image_instance_from_observation(
+        self, image_name, image_id, camera_id, obs, cam_position, cam_quat
+    ):
+        """
+        @Brief: get an Image instance (defined in this file) given the current observation
+        Note that in the OpenGL camera's coord, Y is upward, X is to the right, and Z is backward
+             while in the OpenCV camera's coord, Y is downward,  X is to the right, and Z is forward.
+             while what we're provided from the Replica dataset is w.r.t the OpenGL camera's coord.
+        @Args:
+            - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
+            - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
+                the quaternion in (w, x, y, z) format
+        """
+        # Transformation from OpenCV camera to Open3D world
+        cvCam2W_T = self.get_opencvCam_to_world_transformation(cam_position, cam_quat)
+        cvW2Cam_T = np.linalg.inv(cvCam2W_T)
+        qvec = rotmat2qvec(cvW2Cam_T[:3, :3])
+        tvec = cvW2Cam_T[:3, -1]
+
+        # Get near and far distance from the depth map
+        # TODO: for now, just use the percentile values used in NeRF code
+        near_distance, far_distance = (
+            np.percentile(obs["depth"], 0.1),
+            np.percentile(obs["depth"], 99.9),
+        )
+
+        return MyImage(
+            id=image_id,
+            qvec=qvec,
+            tvec=tvec,
+            camera_id=camera_id,
+            name=image_name,
+            xys=None,
+            near_distance=near_distance,
+            far_distance=far_distance,
+            point3D_ids=None,
+        )
+
     def get_opencvCam_to_world_transformation(self, cam_position, cam_quat):
         """
         @Brief: get the transformation from the OpenCV camera to the world (in computer vision convention)
@@ -37,11 +84,10 @@ class CustomSim(SoundSpacesSim):
         @Args:
             - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
             - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
-                the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
+                the quaternion in (w, x, y, z) format
         """
-        openglCam_rotation_mat = scipy.spatial.transform.Rotation.from_quat(
-            cam_quat
-        ).as_matrix()
+        openglCam_rotation_mat = qvec2rotmat(cam_quat)
+
         openglCam_2hat_T = np.column_stack((openglCam_rotation_mat, cam_position))
         openglCam_2hat_T = np.vstack((openglCam_2hat_T, (0, 0, 0, 1)))
         cvCam2W_T = global_hat2W_T @ openglCam_2hat_T @ global_cvCam_to_openglCam_T
@@ -62,7 +108,7 @@ class CustomSim(SoundSpacesSim):
             - cv_K (np.ndarray, 4x4): intrinsics parameters in OpenCV format
             - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
             - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
-                the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
+                the quaternion in (w, x, y, z) format
         """
         # Get 3D points in the OpenCV camera's coord
         depth = depth.squeeze()[None]  # 1 x H x W
@@ -97,7 +143,7 @@ class CustomSim(SoundSpacesSim):
             - global_hat2W_T (np.ndarray, 4x4): transformation from habitat-sim to open3d
             - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
             - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
-                the (possibly non-unit norm) quaternion in scalar-last (x, y, z, w)
+                the quaternion in (w, x, y, z) format
         """
         depth = depth.squeeze()[None]  # 1 x H x W
         img_h, img_w = rgb.shape[:2]
@@ -119,9 +165,7 @@ class CustomSim(SoundSpacesSim):
         # o3d.visualization.draw_geometries([pcl])
 
         #
-        cam_rotation_mat = scipy.spatial.transform.Rotation.from_quat(
-            cam_quat
-        ).as_matrix()
+        cam_rotation_mat = qvec2rotmat(cam_quat)
         cam_2hat_T = np.column_stack((cam_rotation_mat, cam_position))
         cam_2hat_T = np.vstack((cam_2hat_T, (0, 0, 0, 1)))
         cam2w_T = global_hat2W_T @ cam_2hat_T
@@ -164,6 +208,15 @@ class CustomSim(SoundSpacesSim):
             ]
         )
 
+        # Pinhole model
+        # width, height, focal_x, focal_y, px, py
+        self.colmap_pinhole_rgb_cam = Pinhole_cam(
+            model_name="PINHOLE",
+            width=w,
+            height=h,
+            params=[fx * w / 2.0, fy * h / 2.0, w / 2.0, h / 2.0],
+        )
+
     def compute_depth_intrinsics(self):
         """
         @Brief: calculate the intrinsics parameters for the depth sensor
@@ -193,6 +246,14 @@ class CustomSim(SoundSpacesSim):
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0],
             ]
+        )
+        # Pinhole model
+        # width, height, focal_x, focal_y, px, py
+        self.colmap_pinhole_rgb_cam = Pinhole_cam(
+            model_name="PINHOLE",
+            width=w,
+            height=h,
+            params=[fx * w / 2.0, fy * h / 2.0, w / 2.0, h / 2.0],
         )
 
     def convert_position_to_index(self, position: List) -> int:
@@ -300,6 +361,18 @@ class CustomSim(SoundSpacesSim):
                 self._audiogoal_cache[joint_index] = self._compute_audiogoal()
             audiogoal = self._audiogoal_cache[joint_index]
         observations["audio"] = audiogoal
+
+        # Add RIR file to the observation
+        observations["rir_file"] = os.path.join(
+            self.binaural_rir_dir,
+            str(self.azimuth_angle),
+            "{}_{}.wav".format(
+                self._receiver_position_index, self._source_position_index
+            ),
+        )
+
+        print("[Info]--> RIR file:", observations["rir_file"])
+
         return observations
 
     def get_current_distance_to_goal(self):

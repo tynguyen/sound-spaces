@@ -15,6 +15,13 @@ def get_args(dataset="replica"):
         ),
     )
     parser.add_argument(
+        "--data_saving_root",
+        type=str,
+        default=f"data/scene_colmap/{dataset}",
+        help="Root to the place that we want to write the data to",
+    )
+
+    parser.add_argument(
         "opts",
         default=None,
         nargs=argparse.REMAINDER,
@@ -22,6 +29,9 @@ def get_args(dataset="replica"):
     )
     parser.add_argument(
         "--fps", default=30, type=int, help="Simulation FPS",
+    )
+    parser.add_argument(
+        "--audio_sample_rate", default=44100, type=int, help="Audio sample rate",
     )
     parser.add_argument(
         "--scene",
