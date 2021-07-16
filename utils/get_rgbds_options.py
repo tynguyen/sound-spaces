@@ -17,7 +17,7 @@ def get_args(dataset="replica"):
     parser.add_argument(
         "--data_saving_root",
         type=str,
-        default=f"data/scene_colmap/{dataset}",
+        default=f"data/scene_colmaps/{dataset}",
         help="Root to the place that we want to write the data to",
     )
 

@@ -49,12 +49,23 @@ class CustomSim(SoundSpacesSim):
             - cam_position (np.ndarray, (3,)): transition part of the transformation from sensor to habitat-sim
             - cam_quat(np.ndarray, (4,)): rotation part of the transformation from sensor to habitat-sim.
                 the quaternion in (w, x, y, z) format
+        return MyImage(
+            id=image_id,
+            qvec=qvec, # World to OpenCV cam
+            tvec=tvec, # World to OpenCV cam
+            camera_id=camera_id,
+            name=image_name,
+            xys=None,
+            near_distance=near_distance,
+            far_distance=far_distance,
+            point3D_ids=None,
+        )
         """
         # Transformation from OpenCV camera to Open3D world
         cvCam2W_T = self.get_opencvCam_to_world_transformation(cam_position, cam_quat)
-        cvW2Cam_T = np.linalg.inv(cvCam2W_T)
-        qvec = rotmat2qvec(cvW2Cam_T[:3, :3])
-        tvec = cvW2Cam_T[:3, -1]
+        W2cvCam_T = np.linalg.inv(cvCam2W_T)
+        qvec = rotmat2qvec(W2cvCam_T[:3, :3])
+        tvec = W2cvCam_T[:3, -1]
 
         # Get near and far distance from the depth map
         # TODO: for now, just use the percentile values used in NeRF code
