@@ -8,58 +8,8 @@ import os
 import numpy as np
 from utils.get_rgbds_options import get_args
 from utils.colmap_read_write import read_model
-
-
-def get_single_cam_params(colmap_cameras):
-    """
-    @Brief: Get camera intrinsics parameters
-    """
-    # TODO: handle multiple camera cases.
-    # For now, assume there is only a single camera
-    list_of_keys = list(colmap_cameras.keys())
-    cam = colmap_cameras[list_of_keys[0]]
-    if cam.model == "PINHOLE":
-        h, w, fx, fy = cam.height, cam.width, cam.params[0], cam.params[1]
-    elif cam.model == "SIMPLE_PINHOLE":
-        h, w, fx, fy = cam.height, cam.width, cam.params[0], cam.params[0]
-
-    # TODO: handle PINHOLE camera model.
-    # For now, assume fx = fy
-    assert abs(fx - fy) < 1e-4, f"[Error] Assume fx = fy but your input {fx} != {fy}"
-    f = fx
-    return np.array([h, w, f]).reshape([3, 1])
-
-
-def get_cvCam2W_transformations(colmap_images):
-    """
-    @Brief: get a list of transformations from world to OpenCV camera poses
-    @Args:
-        - colmap_images (dict): map Image ids to MyImage instances
-    @Return:
-        - c2w_mats (List[np.ndarray(4x4)]): list of transformations from OpenCV cam to the world
-    """
-
-    image_names = [colmap_images[k].name for k in colmap_images]
-    print(f"[Info] No of images : {len(image_names)}")
-
-    # Retrieve world to Opencv cam's transformations
-    transmat_bottom_vector = np.array([0, 0, 0, 1.0]).reshape([1, 4])
-    w2c_mats = []
-    near_far_distances = []
-    for k in colmap_images:
-        im = colmap_images[k]
-        R = im.qvec2rotmat()
-        t = im.tvec.reshape([3, 1])
-        w2c_T = np.concatenate([np.concatenate([R, t], 1), transmat_bottom_vector], 0)
-        w2c_mats.append(w2c_T)
-
-        # Near, far distances
-        near_far_distances.append([float(im.near_distance), float(im.far_distance)])
-
-    # Convert to OpenCV cam to world transformations by inversion
-    w2c_mats = np.stack(w2c_mats, 0)
-    c2w_mats = np.linalg.inv(w2c_mats)
-    return c2w_mats, np.array(near_far_distances)
+from utils.colmap_read_write import get_single_cam_params
+from utils.colmap_read_write import get_cvCam2W_transformations
 
 
 def gen_pose(basedir, ext=".txt"):

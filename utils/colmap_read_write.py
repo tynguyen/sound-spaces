@@ -4,7 +4,7 @@
 @Email: tynguyen@seas.upenn.edu
 """
 
-import os, cv2
+import os, cv2, glob
 import collections
 from numpy.linalg.linalg import _fastCopyAndTranspose
 from skimage.filters.edges import farid
@@ -17,6 +17,8 @@ import argparse
 import pickle
 from shutil import copyfile
 from utils.transformations import qvec2rotmat
+import open3d as o3d
+
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"]
@@ -454,31 +456,101 @@ def write_model(cameras, images, path, ext=".txt"):
     return cameras, images
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Read and write COLMAP binary and text models"
+def get_single_cam_params(colmap_cameras):
+    """
+    @Brief: Get camera intrinsics parameters from colmap data
+    """
+    # TODO: handle multiple camera cases.
+    # For now, assume there is only a single camera
+    list_of_keys = list(colmap_cameras.keys())
+    cam = colmap_cameras[list_of_keys[0]]
+    if cam.model == "PINHOLE":
+        h, w, fx, fy = cam.height, cam.width, cam.params[0], cam.params[1]
+    elif cam.model == "SIMPLE_PINHOLE":
+        h, w, fx, fy = cam.height, cam.width, cam.params[0], cam.params[0]
+
+    # TODO: handle PINHOLE camera model.
+    # For now, assume fx = fy
+    assert abs(fx - fy) < 1e-4, f"[Error] Assume fx = fy but your input {fx} != {fy}"
+    f = fx
+    return np.array([h, w, f]).reshape([3, 1])
+
+
+def get_cvCam2W_transformations(colmap_images):
+    """
+    @Brief: get a list of transformations from world to OpenCV camera poses
+    @Args:
+        - colmap_images (dict): map Image ids to MyImage instances
+    @Return:
+        - c2w_mats (List[np.ndarray(4x4)]): list of transformations from OpenCV cam to the world
+    """
+
+    image_names = [colmap_images[k].name for k in colmap_images]
+    print(f"[Info] No of images : {len(image_names)}")
+
+    # Retrieve world to Opencv cam's transformations
+    transmat_bottom_vector = np.array([0, 0, 0, 1.0]).reshape([1, 4])
+    w2c_mats = []
+    near_far_distances = []
+    for k in colmap_images:
+        im = colmap_images[k]
+        R = im.qvec2rotmat()
+        t = im.tvec.reshape([3, 1])
+        w2c_T = np.concatenate([np.concatenate([R, t], 1), transmat_bottom_vector], 0)
+        w2c_mats.append(w2c_T)
+
+        # Near, far distances
+        near_far_distances.append([float(im.near_distance), float(im.far_distance)])
+    # Convert to OpenCV cam to world transformations by inversion
+    w2c_mats = np.stack(w2c_mats, 0)
+    c2w_mats = np.linalg.inv(w2c_mats)
+    return c2w_mats, np.array(near_far_distances)
+
+
+def read_rgbd_images(basedir, filenames, rgb_ext=".jpg", depth_ext=".png"):
+    """
+    @Brief: read RGB and depth images located at {basedir}/images and {basedir}/depth correspondingly
+        given the list filenames.
+            Assume RGB and depth images are given in form of {image_name}.jpg and {image_name}.png
+
+    """
+    rgb_root = os.path.join(basedir, "images")
+    depth_root = os.path.join(basedir, "depths")
+    rgbd_images = {}
+    num_rgbs = len(glob.glob(rgb_root + f"/*{rgb_ext}"))
+    num_depths = len(glob.glob(depth_root + f"/*{depth_ext}"))
+
+    assert (
+        num_rgbs == num_depths
+    ), f"[Error] No of RGB images must be equal to no of depth images. Given {num_rgbs} rgbs, {num_depths} depths"
+    for filename in filenames:
+        fileId = filename.split(".")[0]
+        rgb_file = rgb_root + f"/{fileId}{rgb_ext}"
+        depth_file = depth_root + f"/{fileId}{depth_ext}"
+        rgb = cv2.cvtColor(cv2.imread(rgb_file), cv2.COLOR_BGR2RGB)
+        depth = cv2.imread(depth_file, -1)
+        rgbd_images[filename] = [rgb, depth]
+    return rgbd_images
+
+
+def getPCLfromRGB_D(img, dmap, K, max_depth_in_mm=10000):
+    """
+    @Brief: get pointcloud from RGB and dmap
+    """
+    unit = 1000  # Assume depth unit is milimeter
+    dmap = dmap.astype(np.uint16)
+    o3d_color = o3d.geometry.Image(img)
+
+    o3d_depth = o3d.geometry.Image(dmap)
+    o3d_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
+        o3d_color,
+        o3d_depth,
+        depth_scale=1,
+        depth_trunc=max_depth_in_mm,
+        convert_rgb_to_intensity=False,
     )
-    parser.add_argument("--input_model", help="path to input model folder")
-    parser.add_argument(
-        "--input_format", choices=[".txt"], help="input model format", default="",
+    intrinsic_mat = o3d.camera.PinholeCameraIntrinsic(
+        img.shape[1], img.shape[0], K[0, 0], K[1, 1], K[0, -1], K[1, -1]
     )
-    parser.add_argument("--output_model", help="path to output model folder")
-    parser.add_argument(
-        "--output_format",
-        choices=[".bin", ".txt"],
-        help="outut model format",
-        default=".txt",
-    )
-    args = parser.parse_args()
-
-    cameras, images = read_model(path=args.input_model, ext=args.input_format)
-
-    print("num_cameras:", len(cameras))
-    print("num_images:", len(images))
-
-    if args.output_model is not None:
-        write_model(cameras, images, path=args.output_model, ext=args.output_format)
-
-
-if __name__ == "__main__":
-    main()
+    pcl = o3d.geometry.PointCloud.create_from_rgbd_image(o3d_rgbd, intrinsic_mat)
+    return pcl
