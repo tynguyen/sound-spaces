@@ -34,6 +34,7 @@ from utils.rgbds_simulator import global_hat2W_T
 from utils.observations_conversion import convert_observation_to_frame
 from utils.get_rgbds_options import get_args
 from utils.colmap_read_write import ColmapDataWriter
+from utils.colmap_read_write import getPCLfromRGB_D
 
 
 def main(dataset):
@@ -64,7 +65,7 @@ def main(dataset):
 
     config.freeze()
     simulator = None
-    scene_obs = defaultdict(dict)
+    # scene_obs = defaultdict(dict)
     num_obs = 0
 
     metadata_dir = "data/metadata/" + dataset
@@ -73,6 +74,8 @@ def main(dataset):
     if args.visualize_mesh:
         o3d_visualizer = o3d.visualization.Visualizer()
         o3d_visualizer.create_window()
+        pcl_list = []
+        num_poses_to_show = None
 
     # Prepare to visualize the observations
     if args.visualize_obs:
@@ -109,23 +112,18 @@ def main(dataset):
                 "data/scene_datasets", dataset, scene, "mesh.ply"
             )
             map_mesh = o3d.io.read_point_cloud(scene_pcl_dir)
-            o3d_visualizer.add_geometry(map_mesh)
+            pcl_list.append(map_mesh)
+            # o3d_visualizer.add_geometry(map_mesh)
 
-            # O3d Origin
-            o3d_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(
-                size=0.2, origin=np.array([0, 0, 0])
-            )
-            o3d_visualizer.add_geometry(o3d_origin)
+            # # O3d Origin
+            # o3d_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(
+            #     size=0.2, origin=np.array([0, 0, 0])
+            # )
+            # o3d_visualizer.add_geometry(o3d_origin)
 
-            # Agent pose
-            o3d_agent_pos = o3d.geometry.TriangleMesh.create_coordinate_frame(
-                size=0.2, origin=np.array([0, 0, 0])
-            )
-            o3d_visualizer.add_geometry(o3d_agent_pos)
-
-            # Instant Observation
-            o3d_obs_pcl = o3d.geometry.PointCloud()
-            o3d_visualizer.add_geometry(o3d_obs_pcl)
+            # # Instant Observation
+            # o3d_obs_pcl = o3d.geometry.PointCloud()
+            # o3d_visualizer.add_geometry(o3d_obs_pcl)
 
         # Set a goal location
         goal_radius = 0.00001
@@ -169,30 +167,11 @@ def main(dataset):
                 print(f"[Info] Visualizing agent's pos at {agent_position}")
 
             for angle in [0, 90, 180, 270]:
+                num_obs += 1
                 agent_rotation = quat_to_coeffs(
                     quat_from_angle_axis(np.deg2rad(angle), np.array([0, 1, 0]))
                 ).tolist()  # [b, c, d, a] where the unit quaternion would be a + bi + cj + dk
                 print(f"[Info] ----> Agent rot angle (in habitat): {angle}")
-
-                if args.visualize_mesh:
-                    # Get rotation matrix
-                    agent_rot_mat = scipy.spatial.transform.Rotation.from_quat(
-                        agent_rotation
-                    ).as_matrix()
-                    agent2hat_T = np.column_stack((agent_rot_mat, agent_position))
-                    agent2hat_T = np.vstack((agent2hat_T, (0, 0, 0, 1)))
-                    agent2w_T = global_hat2W_T @ agent2hat_T
-                    # print(f"[Info] Angle {angle}, rot mat to habitat \n {agent2hat_T}")
-                    # print(f"[Info] Angle {angle}, rot mat to world \n {agent2w_T}")
-
-                    # Transform the (0,0,0) coordinate frame to obtain that of the aagent w.r.t the o3d's coord system
-                    o3d_agent_pos.transform(agent2w_T)
-
-                    # Update the visualization
-                    # o3d_visualizer.update_geometry(o3d_agent_pos)
-
-                    # Transform back to 0,0,0. This is just for visualization purpose
-                    o3d_agent_pos.transform(np.linalg.inv(agent2w_T))
 
                 # Get an observation at the new pose (RGB-S)
                 """ Note that the audio is 1 second in length and binaural.
@@ -221,8 +200,7 @@ def main(dataset):
                     [rgbd_sstate.rotation.w] + list(rgbd_sstate.rotation.vec),
                 )
 
-                scene_obs[(node, rotation_index)] = obs
-                num_obs += 1
+                # scene_obs[(node, rotation_index)] = obs
 
                 # Convert the observation to an image frame for demo videos
                 frame = convert_observation_to_frame(obs)
@@ -263,7 +241,14 @@ def main(dataset):
                                 # for some reasons, this quaternion is given in the scalar-first format
                             ),
                         )
-                    o3d.visualization.draw_geometries([map_mesh, o3d_new_pcl])
+                    pcl_list.append(o3d_new_pcl)
+                    o3d_cam_pose = o3d.geometry.TriangleMesh.create_coordinate_frame(
+                        size=0.2
+                    )
+                    o3d_cam_pose.transform(obs["cvCam2W_T"])
+                    pcl_list.append(o3d_cam_pose)
+                    if num_poses_to_show is not None and num_obs >= num_poses_to_show:
+                        break
 
                 # Prepare data to save in the Colmap format (except no Point3D) and add near distance, far distance values to Camera instances
                 # TODO: for now, assume there is only a single camera.
@@ -294,6 +279,12 @@ def main(dataset):
                 data_writer.add_depth_image(f"{image_id}.png", obs)
                 data_writer.add_audio_response(f"{image_id}.wav", obs)
                 data_writer.add_rir_file(f"{image_id}.wav", obs)
+            if args.visualize_mesh:
+                if num_poses_to_show is not None and num_obs >= num_poses_to_show:
+                    break
+        if args.visualize_mesh:
+            o3d.visualization.draw_geometries(pcl_list)
+            o3d_visualizer.destroy_window()
 
         print(f"-----------------------------------------------")
         print("Total number of observations: {}".format(num_obs))
@@ -329,9 +320,6 @@ def main(dataset):
     if not args.visualize_mesh:
         simulator.close()
         del simulator
-
-    if args.visualize_mesh:
-        o3d_visualizer.destroy_window()
 
     if args.visualize_obs:
         cv2.destroyAllWindows()

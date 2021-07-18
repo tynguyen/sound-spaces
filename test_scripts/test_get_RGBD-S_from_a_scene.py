@@ -52,12 +52,19 @@ def test_colmap_data(basedir, colmap_ext=".txt", rgb_ext=".jpg", depth_ext=".png
     # Visualize the pcls
     visualizer = get_o3d_visualizer()
 
-    pcl_lists = []
+    pcl_list = []
     for i, image_name in enumerate(image_names):
         rgb, depth = rgbd_images[image_name]
+        # Depth is given in mm. Convert it to m
+        # plt.subplot(121)
+        # plt.imshow(depth, cmap="jet")
+        depth = depth / 1000.0
+        depth = depth.astype(np.float32)
+        # plt.subplot(122)
+        # plt.imshow(depth, cmap="jet")
+        # plt.show()
         cvCam2W_T = cvCam2W_mats[i]
         o3d_rgbd_pcl = getPCLfromRGB_D(rgb, depth, K)
-        # o3d.visualization.draw_geometries([o3d_rgbd_pcl])
         # Transform this pcl
         o3d_rgbd_pcl.transform(cvCam2W_T)
         # DEBUG rotation vector
@@ -65,12 +72,15 @@ def test_colmap_data(basedir, colmap_ext=".txt", rgb_ext=".jpg", depth_ext=".png
         print(f"[Info] Image: {image_name}")
         print(f"[Info] qvec{qvec}")
         print(f"[Info] tran vec{cvCam2W_T[:3, -1]}")
-        pcl_lists.append(o3d_rgbd_pcl)
-        # visualizer.add_geometry(o3d_rgbd_pcl)
-        if i > 16:
-            break
+        pcl_list.append(o3d_rgbd_pcl)
+        # Camera pose
+        o3d_cam_pose = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
+        o3d_cam_pose.transform(cvCam2W_T)
+        pcl_list.append(o3d_cam_pose)
+        # if i > 16:
+        #     break
 
-    o3d.visualization.draw_geometries(pcl_lists)
+    o3d.visualization.draw_geometries(pcl_list)
     visualizer.destroy_window()
 
 

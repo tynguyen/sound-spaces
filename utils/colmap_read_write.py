@@ -501,6 +501,7 @@ def get_cvCam2W_transformations(colmap_images):
 
         # Near, far distances
         near_far_distances.append([float(im.near_distance), float(im.far_distance)])
+
     # Convert to OpenCV cam to world transformations by inversion
     w2c_mats = np.stack(w2c_mats, 0)
     c2w_mats = np.linalg.inv(w2c_mats)
@@ -533,20 +534,23 @@ def read_rgbd_images(basedir, filenames, rgb_ext=".jpg", depth_ext=".png"):
     return rgbd_images
 
 
-def getPCLfromRGB_D(img, dmap, K, max_depth_in_mm=10000):
+def getPCLfromRGB_D(img, dmap, K, depth_scale=1, max_depth_trunc=10):
     """
     @Brief: get pointcloud from RGB and dmap
+    @Args:
+        - depth_scale (float): by default, just use 1.
+            if using depth_scale > 1 --> make sure max_depth_trunc >= max(dmap) * depth_scale
+        - max_depth_trunc (float): any value in dmap that dmap*depth_scale > max_depth_trunc will become max_depth_trunc
     """
-    unit = 1000  # Assume depth unit is milimeter
-    dmap = dmap.astype(np.uint16)
+    # dmap = dmap.astype(np.uint16)
     o3d_color = o3d.geometry.Image(img)
 
     o3d_depth = o3d.geometry.Image(dmap)
     o3d_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
         o3d_color,
         o3d_depth,
-        depth_scale=1,
-        depth_trunc=max_depth_in_mm,
+        depth_scale=depth_scale,
+        depth_trunc=max_depth_trunc,
         convert_rgb_to_intensity=False,
     )
     intrinsic_mat = o3d.camera.PinholeCameraIntrinsic(
