@@ -476,23 +476,37 @@ def get_single_cam_params(colmap_cameras):
     return np.array([h, w, f]).reshape([3, 1])
 
 
-def get_cvCam2W_transformations(colmap_images):
+def get_cvCam2W_transformations(
+    colmap_images, order_poses_by_image_names=True, get_image_names=False
+):
     """
     @Brief: get a list of transformations from world to OpenCV camera poses
+            The order of poses that we store follows the order of image names
     @Args:
         - colmap_images (dict): map Image ids to MyImage instances
+        - order_by_image_name (bool): Order poses by the corresponding image name or Not.
+            By default, set it to be True because LLFF code (NeRF) reads images in a sorted order
     @Return:
         - c2w_mats (List[np.ndarray(4x4)]): list of transformations from OpenCV cam to the world
     """
+    # List of (name, id) tuples
+    image_names_ids = [
+        (colmap_images[k].name, colmap_images[k].id) for k in colmap_images
+    ]
+    # Sort this tuple based on names
+    sorted_image_names_ids = sorted(image_names_ids, key=lambda x: x[0])
+    if order_poses_by_image_names:
+        sorted_image_ids = [k[1] for k in sorted_image_names_ids]
+    else:
+        sorted_image_ids = [k[1] for k in image_names_ids]
 
-    image_names = [colmap_images[k].name for k in colmap_images]
-    print(f"[Info] No of images : {len(image_names)}")
+    print(f"[Info] No of images : {len(sorted_image_ids)}")
 
     # Retrieve world to Opencv cam's transformations
     transmat_bottom_vector = np.array([0, 0, 0, 1.0]).reshape([1, 4])
     w2c_mats = []
     near_far_distances = []
-    for k in colmap_images:
+    for k in sorted_image_ids:
         im = colmap_images[k]
         R = im.qvec2rotmat()
         t = im.tvec.reshape([3, 1])
@@ -505,6 +519,12 @@ def get_cvCam2W_transformations(colmap_images):
     # Convert to OpenCV cam to world transformations by inversion
     w2c_mats = np.stack(w2c_mats, 0)
     c2w_mats = np.linalg.inv(w2c_mats)
+    if get_image_names:
+        return (
+            c2w_mats,
+            np.array(near_far_distances),
+            [k[0] for k in sorted_image_names_ids],
+        )
     return c2w_mats, np.array(near_far_distances)
 
 

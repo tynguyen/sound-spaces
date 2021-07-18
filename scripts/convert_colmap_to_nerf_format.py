@@ -12,7 +12,7 @@ from utils.colmap_read_write import get_single_cam_params
 from utils.colmap_read_write import get_cvCam2W_transformations
 
 
-def gen_pose(basedir, ext=".txt"):
+def gen_pose(basedir, ext=".txt", order_poses_by_image_names=True):
     """
     @Brief: generate NeRF poses.
     This is modified from the original code and this thread: https://github.com/Fyusion/LLFF/issues/10
@@ -26,8 +26,10 @@ def gen_pose(basedir, ext=".txt"):
     hwf_params = get_single_cam_params(colmap_cameras)
 
     # Get OpenCV cam to world transformations
-    cvCam2W_mats, near_far_distances = get_cvCam2W_transformations(
-        colmap_images
+    cvCam2W_mats, near_far_distances, sorrted_image_names = get_cvCam2W_transformations(
+        colmap_images,
+        order_poses_by_image_names=order_poses_by_image_names,
+        get_image_names=True,
     )  # (Num_poses, 4 x 4)
 
     # Get poses in NeRF format (3x5 x num_images)
@@ -65,9 +67,18 @@ def gen_pose(basedir, ext=".txt"):
     # Save
     np.save(os.path.join(basedir, "poses_bounds.npy"), nerf_poses)
     print(f"[Info] Saved nerf poses to {basedir}/poses_bounds.npy")
+    with open(
+        os.path.join(basedir, "image_names_corresponding_to_poses_bounds.txt"), "w"
+    ) as fin:
+        for image_name in sorrted_image_names:
+            fin.write(image_name + "\n")
+
+    print(
+        f"[Info] Saved image names for poses to {basedir}/image_names_corresponding_to_poses_bounds.txt"
+    )
 
 
 if __name__ == "__main__":
     args = get_args("replica")
     scene_obs_dir = os.path.join(args.data_saving_root, args.scene)
-    gen_pose(scene_obs_dir, ".txt")
+    gen_pose(scene_obs_dir, ".txt", order_poses_by_image_names=True)

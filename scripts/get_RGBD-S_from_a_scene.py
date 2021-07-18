@@ -112,7 +112,7 @@ def main(dataset):
                 "data/scene_datasets", dataset, scene, "mesh.ply"
             )
             map_mesh = o3d.io.read_point_cloud(scene_pcl_dir)
-            pcl_list.append(map_mesh)
+            # pcl_list.append(map_mesh)
             # o3d_visualizer.add_geometry(map_mesh)
 
             # # O3d Origin
