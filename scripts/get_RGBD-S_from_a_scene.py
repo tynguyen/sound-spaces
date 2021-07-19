@@ -166,7 +166,7 @@ def main(dataset):
             if args.visualize_mesh:
                 print(f"[Info] Visualizing agent's pos at {agent_position}")
 
-            for angle in [0, 90, 180, 270]:
+            for angle in range(0, 360, 10):
                 num_obs += 1
                 agent_rotation = quat_to_coeffs(
                     quat_from_angle_axis(np.deg2rad(angle), np.array([0, 1, 0]))
