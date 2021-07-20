@@ -45,6 +45,37 @@ def get_args(dataset="replica"):
         default="person_10",
         help="The name of the sound source file (without the extension)",
     )
+
+    parser.add_argument(
+        "--num_obs_to_generate",
+        default=1e10,
+        type=int,
+        help="Number of observations to generate",
+    )
+
+    parser.add_argument(
+        "--start_pos",
+        type=float,
+        nargs="+",
+        default=[-0.25, -1.55, 0.59],
+        help="Starting position of the agent. This is not important because we read the locations given in the graph and obtain the observation at that location",
+    )
+
+    parser.add_argument(
+        "--goal_pos",
+        type=float,
+        nargs="+",
+        default=[4.75, -1.55, -1.91],
+        help="Goal's position where the agent aims to reach. This is also the sound source location",
+    )
+
+    parser.add_argument(
+        "--agent_path",
+        type=str,
+        default="",
+        help="Path to a json file that specifies the agent path e.g: node (index) and angle (degrees)",
+    )
+
     parser.add_argument(
         "--visualize_mesh", action="store_true", help="Visualize the 3D env pcl or not"
     )

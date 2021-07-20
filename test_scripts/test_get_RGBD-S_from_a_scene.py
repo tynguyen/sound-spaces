@@ -31,12 +31,11 @@ def test_colmap_data(basedir, colmap_ext=".txt", rgb_ext=".jpg", depth_ext=".png
     hwf_params = get_single_cam_params(colmap_cameras).squeeze()
 
     # Get OpenCV cam to world transformations
-    cvCam2W_mats, near_far_distances = get_cvCam2W_transformations(
-        colmap_images
+    cvCam2W_mats, near_far_distances, image_names = get_cvCam2W_transformations(
+        colmap_images, get_image_names=True
     )  # (Num_poses, 4 x 4)
 
     # Get RGBD images
-    image_names = [colmap_images[k].name for k in colmap_images]
     rgbd_images = read_rgbd_images(
         basedir, image_names, rgb_ext=rgb_ext, depth_ext=depth_ext
     )
