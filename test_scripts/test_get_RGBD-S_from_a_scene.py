@@ -16,20 +16,24 @@ from utils.colmap_read_write import getPCLfromRGB_D
 import matplotlib.pyplot as plt
 
 
-def test_colmap_data(basedir, colmap_ext=".txt", rgb_ext=".jpg", depth_ext=".png"):
+def test_colmap_data(
+    basedir, colmap_ext=".txt", rgb_ext=".jpg", depth_ext=".png", colmap_format=False
+):
     """
     @Brief: test colmap data extraction from Soundspaces
     """
     print(f"-----------------------------------")
     print(f"[Info] Dataroot repo: {basedir}")
     colmap_data_root = os.path.join(basedir, "map")
-    colmap_cameras, colmap_images = read_model(colmap_data_root, colmap_ext)
+    colmap_cameras, colmap_images = read_model(
+        colmap_data_root, colmap_ext, colmap_format=colmap_format
+    )
 
     # Get camera intrinsics parameters
     # TODO: handle multiple camera cases.
     # For now, assume there is only a single camera
     hwf_params = get_single_cam_params(colmap_cameras).squeeze()
-
+    print(f"[Info] hwf_params: {hwf_params}")
     # Get OpenCV cam to world transformations
     cvCam2W_mats, near_far_distances, image_names = get_cvCam2W_transformations(
         colmap_images, get_image_names=True
@@ -76,7 +80,7 @@ def test_colmap_data(basedir, colmap_ext=".txt", rgb_ext=".jpg", depth_ext=".png
         o3d_cam_pose = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
         o3d_cam_pose.transform(cvCam2W_T)
         pcl_list.append(o3d_cam_pose)
-        # if i > 16:
+        # if i > 0:
         #     break
 
     o3d.visualization.draw_geometries(pcl_list)
@@ -92,4 +96,6 @@ def get_o3d_visualizer():
 if __name__ == "__main__":
     args = get_args("replica")
     scene_obs_dir = os.path.join(args.data_saving_root, args.scene)
-    test_colmap_data(scene_obs_dir, ".txt")
+    # To read our custom reconstruction files, set colmap_format to be False
+    # To read our Colmap reconstruction files, set colmap_format to be True
+    test_colmap_data(scene_obs_dir, ".txt", colmap_format=False)

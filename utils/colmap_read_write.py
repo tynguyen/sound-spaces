@@ -25,7 +25,7 @@ CameraModel = collections.namedtuple(
 )
 Camera = collections.namedtuple("Camera", ["id", "model", "width", "height", "params"],)
 MyBaseImage = collections.namedtuple(
-    "Image",
+    "MyImage",
     [
         "id",
         "qvec",
@@ -345,11 +345,19 @@ def write_cameras_text(cameras, path):
             fid.write(line + "\n")
 
 
-def read_images_text(path):
-    """
-    see: src/base/reconstruction.cc
-        void Reconstruction::ReadImagesText(const std::string& path)
-        void Reconstruction::WriteImagesText(const std::string& path)
+def read_images_text(path, colmap_format=False):
+    """Read Image instances from reconstruction files given in .txt format
+    By default, the file is given in a customized format which is similar to Colmap
+    but does not contain some information such as 3D points.
+    To read the file given in the original Colmap format, set colmap_format=True
+
+    Args:
+        path (str): path to the image file, include itself (images.txt)
+        colmap_format (bool, optional): Whether the file is exactly in the Colmap fromat. Defaults to False.
+
+    Returns:
+        images [MyImage or Image]: Depend on the colmap_format boolean variable,
+            this function will return a MyImage or Image instance
     """
     images = {}
     with open(path, "r") as fid:
@@ -365,10 +373,21 @@ def read_images_text(path):
                 tvec = np.array(tuple(map(float, elems[5:8])))
                 camera_id = int(elems[8])
                 image_name = elems[9]
-                near_distance = elems[10]
-                far_distance = elems[11]
-                xys = None
-                point3D_ids = None
+                if colmap_format:
+                    elems = fid.readline().split()
+                    xys = np.column_stack(
+                        [tuple(map(float, elems[0::3])), tuple(map(float, elems[1::3]))]
+                    )
+                    point3D_ids = np.array(tuple(map(int, elems[2::3])))
+                    near_distance = 0
+                    far_distance = 0
+
+                else:
+                    near_distance = elems[10]
+                    far_distance = elems[11]
+                    xys = None
+                    point3D_ids = None
+
                 images[image_id] = MyImage(
                     id=image_id,
                     qvec=qvec,
@@ -427,7 +446,7 @@ def detect_model_format(path, ext):
     return False
 
 
-def read_model(path, ext=""):
+def read_model(path, ext="", colmap_format=False):
     # try to detect the extension automatically
     if ext == "":
         if detect_model_format(path, ".bin"):
@@ -440,7 +459,9 @@ def read_model(path, ext=""):
 
     if ext == ".txt":
         cameras = read_cameras_text(os.path.join(path, "cameras" + ext))
-        images = read_images_text(os.path.join(path, "images" + ext))
+        images = read_images_text(
+            os.path.join(path, "images" + ext), colmap_format=colmap_format
+        )
     else:
         cameras = read_cameras_binary(os.path.join(path, "cameras" + ext))
         images = read_images_binary(os.path.join(path, "images" + ext))
@@ -466,12 +487,12 @@ def get_single_cam_params(colmap_cameras):
     cam = colmap_cameras[list_of_keys[0]]
     if cam.model == "PINHOLE":
         h, w, fx, fy = cam.height, cam.width, cam.params[0], cam.params[1]
-    elif cam.model == "SIMPLE_PINHOLE":
+    elif cam.model in ["SIMPLE_PINHOLE", "SIMPLE_RADIAL"]:
         h, w, fx, fy = cam.height, cam.width, cam.params[0], cam.params[0]
 
     # TODO: handle PINHOLE camera model.
     # For now, assume fx = fy
-    assert abs(fx - fy) < 1e-4, f"[Error] Assume fx = fy but your input {fx} != {fy}"
+    assert abs(fx - fy) < 0.5, f"[Error] Assume fx = fy but your input {fx} != {fy}"
     f = fx
     return np.array([h, w, f]).reshape([3, 1])
 
