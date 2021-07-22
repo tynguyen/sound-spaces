@@ -61,9 +61,14 @@ def create_graph_from_points_dict(points_dict, saving_file=None, graph_to_copy=N
         # graph.add_edges_from(graph_to_copy.edges)
     else:
         graph = nx.Graph()
+    # Add nodes to the graph as well as dummy edges connecting these nodes
+    prev_node = None
     for node, point in points_dict.items():
         if node not in graph.nodes:
             graph.add_node(node, point=point)
+        if prev_node is not None:
+            graph.add_edge(prev_node, node)
+        prev_node = node
     if saving_file is not None:
         with open(saving_file, "wb") as fin:
             pkl.dump(graph, fin)

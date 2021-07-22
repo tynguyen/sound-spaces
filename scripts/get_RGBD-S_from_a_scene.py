@@ -154,7 +154,7 @@ def main(dataset):
 
         # Set a goal location
         goal_radius = 0.00001
-        goal = NavigationGoal(position=args.goal_pos, radius=goal_radius)  # index: 98
+        goal = NavigationGoal(position=points_dict[args.goal_node], radius=goal_radius)
         agent_start_R = quat_to_coeffs(
             quat_from_angle_axis(np.deg2rad(0), np.array([0, 1, 0]))
         ).tolist()  # [b, c, d, a] where the unit quaternion would be a + bi + cj + dk
@@ -162,7 +162,7 @@ def main(dataset):
             goals=[goal],
             episode_id=str(0),
             scene_id=scene_mesh_dir,
-            start_position=args.start_pos,  # index: 8
+            start_position=points_dict[args.start_node],  # index: 8
             start_rotation=agent_start_R,
             info={"sound": args.sound_name},
         )

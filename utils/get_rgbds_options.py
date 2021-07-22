@@ -54,19 +54,17 @@ def get_args(dataset="replica"):
     )
 
     parser.add_argument(
-        "--start_pos",
-        type=float,
-        nargs="+",
-        default=[-0.25, -1.55, 0.59],
-        help="Starting position of the agent. This is not important because we read the locations given in the graph and obtain the observation at that location",
+        "--start_node",
+        type=int,
+        default=50,
+        help="Index of the starting position of the agent. This is not important because we read the locations given in the graph and obtain the observation at that location",
     )
 
     parser.add_argument(
-        "--goal_pos",
-        type=float,
-        nargs="+",
-        default=[4.75, -1.55, -1.91],
-        help="Goal's position where the agent aims to reach. This is also the sound source location",
+        "--goal_node",
+        type=int,
+        default=98,
+        help="Index of the goal's position where the agent plans to reach. This is also the sound source location",
     )
 
     parser.add_argument(
