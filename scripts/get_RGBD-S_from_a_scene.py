@@ -90,8 +90,9 @@ def main(dataset):
 
     for scene in os.listdir(metadata_dir):
         # Store frames and audios to write to a video
-        scene_frames = []
-        scene_audios = []
+        if args.save_video:
+            scene_frames = []
+            scene_audios = []
         print(f"-----------------------------------------------")
         if args.scene and scene != args.scene.lower():
             print(
@@ -192,7 +193,7 @@ def main(dataset):
                 f"[Info] A list of nodes to travel has NOT been given! Will use graph.nodes()"
             )
             node_list_to_travel = my_graph.nodes()
-            angle_list_to_travel = None
+            angle_list_to_travel = []
 
         for n, node in enumerate(node_list_to_travel):
             print(f"-------------------------------------------")
@@ -207,10 +208,7 @@ def main(dataset):
                 print(f"[Info] Visualizing agent's pos at {agent_position}")
 
             for angle in range(0, 360, 10):
-                if (
-                    angle_list_to_travel is not None
-                    and angle != angle_list_to_travel[n]
-                ):
+                if angle_list_to_travel and angle != angle_list_to_travel[n]:
                     continue
                 num_obs += 1
                 agent_rotation = quat_to_coeffs(
@@ -227,6 +225,10 @@ def main(dataset):
                     agent_position, agent_rotation
                 )
                 rotation_index = simulator._rotation_angle
+
+                # If setting monoaudio, save only left-ear audio
+                if args.monoaudio:
+                    obs["audio"] = obs["audio"][0, :][None]
 
                 # Get sensors' states (in the habitat-sim world). Here, assume RGB and depth sensors are already aligned
                 sim_cur_state = simulator.get_agent_state()
@@ -245,16 +247,14 @@ def main(dataset):
                     [rgbd_sstate.rotation.w] + list(rgbd_sstate.rotation.vec),
                 )
 
-                # scene_obs[(node, rotation_index)] = obs
-
                 # Convert the observation to an image frame for demo videos
                 frame = convert_observation_to_frame(obs)
 
-                # Store
-                # TODO: continuous view
-                for _ in range(args.fps):
-                    scene_frames.append(frame)
-                scene_audios.append(obs["audio"])
+                # To save visualization video
+                if args.save_video:
+                    for _ in range(args.fps):
+                        scene_frames.append(frame)
+                    scene_audios.append(obs["audio"])
 
                 # Debug the observation
                 if args.visualize_obs:
@@ -320,10 +320,13 @@ def main(dataset):
                 data_writer.add_colmap_image(image_id, colmap_image_instance)
 
                 # RGBD-S data
-                data_writer.add_rgb_image(f"{image_id}.jpg", obs)
-                data_writer.add_depth_image(f"{image_id}.png", obs)
-                data_writer.add_audio_response(f"{image_id}.wav", obs)
-                data_writer.add_rir_file(f"{image_id}.wav", obs)
+                if "rgb" in args.modalities.lower():
+                    data_writer.add_rgb_image(f"{image_id}.jpg", obs)
+                if "d" in args.modalities.lower():
+                    data_writer.add_depth_image(f"{image_id}.png", obs)
+                if "s" in args.modalities.lower():
+                    data_writer.add_audio_response(f"{image_id}.wav", obs)
+                    data_writer.add_rir_file(f"{image_id}.wav", obs)
             if args.visualize_mesh:
                 if num_poses_to_show is not None and num_obs >= num_poses_to_show:
                     break
@@ -333,12 +336,6 @@ def main(dataset):
 
         print(f"-----------------------------------------------")
         print("Total number of observations: {}".format(num_obs))
-        # scene_obs_pkl_file = os.path.join(scene_obs_dir, "{}.pkl".format(scene))
-        # Simply dumpe the data to a pickle file
-        # data_writer.write_data_to_pickle_file(scene_obs, scene_obs_pkl_file)
-        # print(
-        #     f"[Info] Saved data simulated from scene {args.scene} to\n {scene_obs_pkl_file}"
-        # )
 
         # Write colmap data
         data_writer.write_colmap_data_to_files(".txt")
@@ -350,17 +347,18 @@ def main(dataset):
 
         # Save images & audios to a video
         # Place to dump the demo video
-        video_dir = os.path.join("data/scene_RGBS/", dataset, scene)
-        video_name = "demo"
-        images_to_video_with_audio(
-            scene_frames,
-            video_dir,
-            video_name,
-            scene_audios,
-            sr=config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE,
-            fps=args.fps,
-        )
-        print(f"[Info] Saved video {video_dir}/{video_name}.mp4")
+        if args.save_video:
+            video_dir = os.path.join("data/scene_RGBS/", dataset, scene)
+            video_name = "demo"
+            images_to_video_with_audio(
+                scene_frames,
+                video_dir,
+                video_name,
+                scene_audios,
+                sr=config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE,
+                fps=args.fps,
+            )
+            print(f"[Info] Saved video {video_dir}/{video_name}.mp4")
 
     if not args.visualize_mesh:
         simulator.close()

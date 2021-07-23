@@ -61,9 +61,22 @@ def get_args(dataset="replica"):
     )
 
     parser.add_argument(
+        "--monoaudio",
+        action="store_true",
+        help="If setting, save only audio for the left-ear microphone",
+    )
+
+    parser.add_argument(
+        "--modalities",
+        type=str,
+        default="RGBDS",
+        help="Modalities in the dataset to save. By default, save both RGBD and sound",
+    )
+
+    parser.add_argument(
         "--goal_node",
         type=int,
-        default=98,
+        default=0,
         help="Index of the goal's position where the agent plans to reach. This is also the sound source location",
     )
 
@@ -79,6 +92,9 @@ def get_args(dataset="replica"):
     )
     parser.add_argument(
         "--visualize_obs", action="store_true", help="Visualize the observations or not"
+    )
+    parser.add_argument(
+        "--save_video", action="store_true", help="Save visualization video or not"
     )
     parser.add_argument(
         "--test_cv_K",
