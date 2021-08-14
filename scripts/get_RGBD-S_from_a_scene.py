@@ -65,7 +65,7 @@ def main(dataset):
     config.TASK_CONFIG.SIMULATOR.CONTINUOUS_VIEW_CHANGE = True
     config.TASK_CONFIG.SIMULATOR.VIEW_CHANGE_FPS = args.fps
     config.TASK_CONFIG.SIMULATOR.AUDIO.RIR_SAMPLING_RATE = args.audio_sample_rate
-    config.TASK_CONFIG.SIMULATOR.AUDIO.SOURCE_SOUND_DIR = "data/sounds/1s_all"
+    config.TASK_CONFIG.SIMULATOR.AUDIO.SOURCE_SOUND_DIR = "data/sounds/my_audios"
     # metadata_dir for the simulator
     config.TASK_CONFIG.SIMULATOR.AUDIO.METADATA_DIR = "data/my_metadata/"
 
