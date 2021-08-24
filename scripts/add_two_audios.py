@@ -77,6 +77,6 @@ if __name__ == "__main__":
         audio1_files_dir,
         audio2_files_dir,
         "/home/tynguyen/bags/sound_nerf_raw_data/audios_cello_0_insane_piano_39",
-        gain_1=1.0,
-        gain_2=1.0
+        gain_1=1.2/1.5,
+        gain_2=0.5/1.5
     )

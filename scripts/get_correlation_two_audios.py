@@ -82,11 +82,11 @@ if __name__ == "__main__":
     source_audio_dir1 = (
         "/home/tynguyen/github_ws/sound-spaces/data/sounds/my_audios/cello_1s.wav"
     )
-    source_audio_dir2 = "/home/tynguyen/github_ws/sound-spaces/data/sounds/my_audios/river_flow_in_you.wav"
+    source_audio_dir2 = "/home/tynguyen/github_ws/sound-spaces/data/sounds/my_audios/insane_piano_2s.wav"
 
     # target_audios_dir = "/home/tynguyen/bags/sound_nerf_raw_data/audios_cellos_1s_river_flow_in_you_combined"
     target_audios_dir = (
-        "/home/tynguyen/bags/sound_nerf_raw_data/audios_river_flow_in_you"
+        "/home/tynguyen/bags/sound_nerf_raw_data/audios_cello_0_insane_piano_39"
     )
     # We also find the correlation between the source audio and the target audios whose name are in the following list
     target_audios_names = [
@@ -116,6 +116,6 @@ if __name__ == "__main__":
     # Draw correlations
     X = np.arange(len(source1_corrs))
     plt.plot(X, source1_corrs, label="cello")
-    plt.plot(X, source2_corrs, label="bach")
-    plt.legend(["cello", "bach"])
+    plt.plot(X, source2_corrs, label="piano")
+    plt.legend(["cello", "piano"])
     plt.show()
