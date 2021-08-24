@@ -39,6 +39,7 @@ from utils.colmap_read_write import ColmapDataWriter
 from utils.colmap_read_write import getPCLfromRGB_D
 from utils.simulator_utils import load_points_dict
 from utils.simulator_utils import create_graph_from_points_dict
+from utils.open3d_utils import text_3d
 
 
 def main(dataset):
@@ -140,7 +141,7 @@ def main(dataset):
                 "data/scene_datasets", dataset, scene, "mesh.ply"
             )
             map_mesh = o3d.io.read_point_cloud(scene_pcl_dir)
-            # pcl_list.append(map_mesh)
+            pcl_list.append(map_mesh)
             # o3d_visualizer.add_geometry(map_mesh)
 
             # # O3d Origin
@@ -286,12 +287,24 @@ def main(dataset):
                                 # for some reasons, this quaternion is given in the scalar-first format
                             ),
                         )
-                    pcl_list.append(o3d_new_pcl[0])
+                    # Check the alignment of the pcl with the global's mesh by uncomment the following line
+                    # pcl_list.append(o3d_new_pcl[0])
+
                     o3d_cam_pose = o3d.geometry.TriangleMesh.create_coordinate_frame(
                         size=0.2
                     )
                     o3d_cam_pose.transform(obs["cvCam2W_T"])
                     pcl_list.append(o3d_cam_pose)
+                    # Add label to the camera on Open3D
+                    cam_3d_label = text_3d(
+                        f"{node}_{angle}",
+                        (0, -0.05, 0.2),
+                        (1, 0, 0),
+                        font_size=10,
+                        font="DejaVuSans-BoldOblique.ttf",  # To see list of available fonts on the system, run $ fc-list
+                    )  # (0, -0.05, 0.2) is the offset of the label from the camera to make it look better
+                    cam_3d_label.translate(obs["cvCam2W_T"][:3, -1])
+                    pcl_list.append(cam_3d_label)
                     if num_poses_to_show is not None and num_obs >= num_poses_to_show:
                         break
 

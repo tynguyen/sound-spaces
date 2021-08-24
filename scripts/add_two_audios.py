@@ -63,10 +63,12 @@ def add_audios_in_pairs(audios_1_dir: str, audios_2_dir: str, output_dir: str):
 
 
 if __name__ == "__main__":
-    audio1_files_dir = "/home/tynguyen/bags/sound_nerf_raw_data/audios_bach_piano_1s"
+    audio1_files_dir = (
+        "/home/tynguyen/bags/sound_nerf_raw_data/audios_river_flow_in_you"
+    )
     audio2_files_dir = "/home/tynguyen/bags/sound_nerf_raw_data/audios_cellos_1s"
     add_audios_in_pairs(
         audio1_files_dir,
         audio2_files_dir,
-        "/home/tynguyen/bags/sound_nerf_raw_data/audios_cellos_1s_bach_piano_1s_combined",
+        "/home/tynguyen/bags/sound_nerf_raw_data/audios_cellos_1s_river_flow_in_you_combined",
     )
