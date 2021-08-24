@@ -230,11 +230,24 @@ class ColmapDataWriter(Object):
             copyfile(self.rirs[rir_file], os.path.join(self.rir_root, rir_file))
 
         for audio_file in self.audios:
+            #TODO: check this if the normalization term is good
+
+            norm_audio = self.audios[audio_file].transpose(1, 0)/10.
             soundfile.write(
                 os.path.join(self.audio_root, audio_file),
-                self.audios[audio_file].transpose(1, 0),
+                norm_audio,
                 samplerate=self.audio_sample_rate,
+                subtype='FLOAT' # 32 bit float
             )
+            # import librosa.display
+            # import  matplotlib.pyplot as plt
+            # plt.subplot(211)
+            # librosa.display.waveplot(self.audios[audio_file][0], sr=self.audio_sample_rate)
+            # plt.subplot(212)
+            # saved_audio = librosa.load(os.path.join(self.audio_root, audio_file), sr=None)[0]
+            # librosa.display.waveplot(saved_audio, sr=self.audio_sample_rate)
+            # plt.show()
+
 
     def write_data_to_pickle_file(self, data, scene_obs_file):
         with open(scene_obs_file, "wb") as fo:

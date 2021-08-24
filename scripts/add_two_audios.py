@@ -12,7 +12,8 @@ import soundfile
 
 
 def add_two_audios_from_files(
-    audio_file_1: str, audio_file_2: str, output_file_path: str
+    audio_file_1: str, audio_file_2: str, output_file_path: str,
+    gain_1: float = 1.0, gain_2: float = 1.0,
 ) -> None:
     """
     Add two audio files together
@@ -31,16 +32,18 @@ def add_two_audios_from_files(
     assert len(audio_1) == len(
         audio_2
     ), "[Error] Length of audio files are not the same!"
-    output_audio = audio_1 + audio_2
-    soundfile.write(output_file_path, output_audio, sr_1)
+    output_audio = gain_1* audio_1 + gain_2 * audio_2
+    soundfile.write(output_file_path, output_audio, sr_1, subtype="FLOAT")
 
 
-def add_audios_in_pairs(audios_1_dir: str, audios_2_dir: str, output_dir: str):
+def add_audios_in_pairs(audios_1_dir: str, audios_2_dir: str, output_dir: str, gain_1: float = 1.0, gain_2: float = 1.0) -> None:
     """
     Add two audio files together, pair by pair
     @param audios_1_dir: directory of audios 1
     @param audios_2_dir: directory of audios 2
     @param output_dir: directory of output
+    @param gain_1: gain of audios 1
+    @param gain_2: gain of audios 2
     """
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -57,18 +60,23 @@ def add_audios_in_pairs(audios_1_dir: str, audios_2_dir: str, output_dir: str):
                 os.path.join(audios_1_dir, file_name_1 + ".wav"),
                 os.path.join(audios_2_dir, file_name_1 + ".wav"),
                 output_file_path,
+                gain_1,
+                gain_2,
             )
     print(f"[Info] End!")
     print(f"[Info] Processed {i+1} audios in total!")
 
 
 if __name__ == "__main__":
-    audio1_files_dir = (
-        "/home/tynguyen/bags/sound_nerf_raw_data/audios_river_flow_in_you"
+    audio1_files_dir = "/home/tynguyen/bags/sound_nerf_raw_data/audios_cello_0"
+    audio2_files_dir = (
+        "/home/tynguyen/bags/sound_nerf_raw_data/audios_insane_piano_39"
     )
-    audio2_files_dir = "/home/tynguyen/bags/sound_nerf_raw_data/audios_cellos_1s"
+
     add_audios_in_pairs(
         audio1_files_dir,
         audio2_files_dir,
-        "/home/tynguyen/bags/sound_nerf_raw_data/audios_cellos_1s_river_flow_in_you_combined",
+        "/home/tynguyen/bags/sound_nerf_raw_data/audios_cello_0_insane_piano_39",
+        gain_1=1.0,
+        gain_2=1.0
     )
