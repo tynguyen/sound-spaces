@@ -286,7 +286,7 @@ def main(dataset):
                                 # for some reasons, this quaternion is given in the scalar-first format
                             ),
                         )
-                    pcl_list.append(o3d_new_pcl)
+                    pcl_list.append(o3d_new_pcl[0])
                     o3d_cam_pose = o3d.geometry.TriangleMesh.create_coordinate_frame(
                         size=0.2
                     )
