@@ -196,6 +196,8 @@ def main(dataset):
             node_list_to_travel = my_graph.nodes()
             angle_list_to_travel = []
 
+        # Assign the node-angle anchor to the first node in the node_list_to_travel
+        anchor_node_angle = f"{node_list_to_travel[0]}_{0 if len(angle_list_to_travel) == 0 else angle_list_to_travel[0]}"
         for n, node in enumerate(node_list_to_travel):
             print(f"-------------------------------------------")
             # All rotation and position here are w.r.t the habitat's coordinate system which is
@@ -247,6 +249,15 @@ def main(dataset):
                     rgbd_sstate.position,
                     [rgbd_sstate.rotation.w] + list(rgbd_sstate.rotation.vec),
                 )
+
+                # Take one node as the anchor and find the relative transformation between any node to that node. This will be useful
+                # later on in sound NeRF to find each node's coordinate in the NeRF space.
+                if f"{node}_{angle}"== anchor_node_angle:
+                    anchor_cvCam2W_T = obs["cvCam2W_T"].copy()
+                    print(f"[Info] This node {node} angle {angle} is used as the anchor for other poses")
+                    print(f"[Info] anchor_cvCam2W_T: {anchor_cvCam2W_T}")
+                cvCam2anchor_T = np.linalg.inv(anchor_cvCam2W_T) @ obs["cvCam2W_T"]
+                print(f"[Info] cvCam2anchor_T: {cvCam2anchor_T}")
 
                 # Convert the observation to an image frame for demo videos
                 frame = convert_observation_to_frame(obs)
@@ -332,6 +343,11 @@ def main(dataset):
 
                 data_writer.add_colmap_image(image_id, colmap_image_instance)
 
+                # Write the relative transformation from the camera to the anchor node - angle
+                data_writer.add_relative_transform_to_anchor(
+                    image_id = image_id,
+                    cvCam2anchor_T =cvCam2anchor_T,
+                )
                 # RGBD-S data
                 if "rgb" in args.modalities.lower():
                     data_writer.add_rgb_image(f"{image_id}.jpg", obs)
@@ -353,6 +369,10 @@ def main(dataset):
         # Write colmap data
         data_writer.write_colmap_data_to_files(".txt")
         print(f"[Info] Saved colmap data from scene {args.scene} to\n {scene_obs_dir}")
+
+        # Write relative transformation from the camera to the anchor node - angle
+        data_writer.write_transform2anchor_to_files(".json")
+        print(f"[Info] Saved transformations from camera poses to the anchor to\n {scene_obs_dir}")
 
         # Write RGB-S data
         data_writer.write_rgbds_data_to_files()

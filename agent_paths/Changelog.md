@@ -17,6 +17,7 @@ python scripts/get_correlation_two_audios.py
 ```
 
 - [x] Normalize recorded audio by 10. before saving to avoid clamping. Details: `soundpaces/simulator.py`
+- [x] Save relative transformations from camera poses to the anchor which is the first node-angle on the robot's path
 
 ## Changed
 

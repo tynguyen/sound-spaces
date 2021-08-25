@@ -18,7 +18,7 @@ import pickle
 from shutil import copyfile
 from utils.transformations import qvec2rotmat
 import open3d as o3d
-
+import json
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"]
@@ -73,12 +73,17 @@ class ColmapDataWriter(Object):
         self.colmap_root = os.path.join(data_root, "map")
         self.ext = ext
 
+        # Root to the relative transformation between each camera view and the anchor
+        self.transform2anchor_root = os.path.join(data_root, "transforms2anchor")
+        self.transforms2anchor = {}
+
         # Create repos
         os.makedirs(self.rgb_root, exist_ok=True)
         os.makedirs(self.depth_root, exist_ok=True)
         os.makedirs(self.audio_root, exist_ok=True)
         os.makedirs(self.rir_root, exist_ok=True)
         os.makedirs(self.colmap_root, exist_ok=True)
+        os.makedirs(self.transform2anchor_root, exist_ok=True)
 
     def _form_a_camera(self, model, camera_id, width, height, params):
         """
@@ -98,6 +103,14 @@ class ColmapDataWriter(Object):
         self.cameras[camera_id] = self._form_a_camera(
             model, camera_id, width, height, params
         )
+    def add_relative_transform_to_anchor(self,
+                    image_id: str,
+                    cvCam2anchor_T: np.ndarray,
+                ) -> None:
+        """
+        @Brief: add a transform from camera_id to anchor to the anchor
+        """
+        self.transforms2anchor[image_id] = cvCam2anchor_T
 
     def _form_an_image(
         self,
@@ -202,6 +215,28 @@ class ColmapDataWriter(Object):
             )
 
         write_model(self.cameras, self.images, self.colmap_root, self.ext)
+
+    def write_transform2anchor_to_files(self, ext=".txt"):
+        """
+        @Brief: write transform2anchor data to files
+        """
+        file_path = os.path.join(self.transform2anchor_root, "transform2anchor" + ext)
+        if ext == ".txt":
+            with open(file_path, "w") as fid:
+                for image_id, cvCam2anchor_T in self.transforms2anchor.items():
+                    to_write = [image_id, *cvCam2anchor_T.flatten().tolist()]
+                    line = " ".join([str(elem) for elem in to_write])
+                    fid.write(line + "\n")
+
+        elif ext == ".json":
+            for image_id, cvCam2anchor_T in self.transforms2anchor.items():
+                self.transforms2anchor[image_id] = cvCam2anchor_T.tolist()
+            with open(file_path, "w") as fid:
+                json.dump(self.transforms2anchor, fid)
+        else:
+            raise (
+                f"[Error] Given extension {ext} is not supported. Only support .txt or .json"
+            )
 
     def add_rgb_image(self, image_file, obs):
         self.rgb_images[image_file] = obs["rgb"][:, :, ::-1]  # Convert RGB to GBR
