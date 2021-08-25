@@ -103,6 +103,16 @@ class ColmapDataWriter(Object):
         self.cameras[camera_id] = self._form_a_camera(
             model, camera_id, width, height, params
         )
+        "anchor_node_angle"
+    def add_anchor_of_relative_transforms(self,
+                    node_angle_id: str,
+                ) -> None:
+        """
+        @Brief: add the anchor node to which other nodes are relative to
+        """
+        self.transforms2anchor["anchor_node_angle"] = node_angle_id
+
+
     def add_relative_transform_to_anchor(self,
                     image_id: str,
                     cvCam2anchor_T: np.ndarray,

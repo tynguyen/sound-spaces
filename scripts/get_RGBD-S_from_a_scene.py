@@ -198,6 +198,7 @@ def main(dataset):
 
         # Assign the node-angle anchor to the first node in the node_list_to_travel
         anchor_node_angle = f"{node_list_to_travel[0]}_{0 if len(angle_list_to_travel) == 0 else angle_list_to_travel[0]}"
+        data_writer.add_anchor_of_relative_transforms(anchor_node_angle) # Add anchor of relative transforms
         for n, node in enumerate(node_list_to_travel):
             print(f"-------------------------------------------")
             # All rotation and position here are w.r.t the habitat's coordinate system which is
