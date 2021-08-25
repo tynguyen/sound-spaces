@@ -223,13 +223,21 @@ class ColmapDataWriter(Object):
         file_path = os.path.join(self.transform2anchor_root, "transform2anchor" + ext)
         if ext == ".txt":
             with open(file_path, "w") as fid:
+                # Write header
+                line = "anchor_node_angle" + " " + self.transforms2anchor["anchor_node_angle"]
+                fid.write(line + "\n")
+                # Write relative transformations
                 for image_id, cvCam2anchor_T in self.transforms2anchor.items():
+                    if image_id == "anchor_node_angle":
+                        continue
                     to_write = [image_id, *cvCam2anchor_T.flatten().tolist()]
                     line = " ".join([str(elem) for elem in to_write])
                     fid.write(line + "\n")
 
         elif ext == ".json":
             for image_id, cvCam2anchor_T in self.transforms2anchor.items():
+                if image_id == "anchor_node_angle": # Header ("anchor_node_angle": image_id)
+                    continue
                 self.transforms2anchor[image_id] = cvCam2anchor_T.tolist()
             with open(file_path, "w") as fid:
                 json.dump(self.transforms2anchor, fid)
