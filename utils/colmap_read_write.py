@@ -73,9 +73,9 @@ class ColmapDataWriter(Object):
         self.colmap_root = os.path.join(data_root, "map")
         self.ext = ext
 
-        # Root to the relative transformation between each camera view and the anchor
-        self.transform2anchor_root = os.path.join(data_root, "transforms2anchor")
-        self.transforms2anchor = {}
+        # Root to the coordinate of poses in the metrics space. We store poses of all nodes in a scene's graph
+        self.poses_in_metrics_space_root = os.path.join(data_root, "all_graph_poses_in_metrics_space")
+        self.poses_in_metrics_space  = {}
 
         # Create repos
         os.makedirs(self.rgb_root, exist_ok=True)
@@ -83,7 +83,7 @@ class ColmapDataWriter(Object):
         os.makedirs(self.audio_root, exist_ok=True)
         os.makedirs(self.rir_root, exist_ok=True)
         os.makedirs(self.colmap_root, exist_ok=True)
-        os.makedirs(self.transform2anchor_root, exist_ok=True)
+        os.makedirs(self.poses_in_metrics_space_root, exist_ok=True)
 
     def _form_a_camera(self, model, camera_id, width, height, params):
         """
@@ -104,23 +104,15 @@ class ColmapDataWriter(Object):
             model, camera_id, width, height, params
         )
         "anchor_node_angle"
-    def add_anchor_of_relative_transforms(self,
-                    node_angle_id: str,
-                ) -> None:
-        """
-        @Brief: add the anchor node to which other nodes are relative to
-        """
-        self.transforms2anchor["anchor_node_angle"] = node_angle_id
 
-
-    def add_relative_transform_to_anchor(self,
+    def add_pose_in_metrics_space(self,
                     image_id: str,
-                    cvCam2anchor_T: np.ndarray,
+                    cvCam2world_T: np.ndarray,
                 ) -> None:
         """
-        @Brief: add a transform from camera_id to anchor to the anchor
+        @Brief: add a pose in the metrics space
         """
-        self.transforms2anchor[image_id] = cvCam2anchor_T
+        self.poses_in_metrics_space[image_id] = cvCam2world_T
 
     def _form_an_image(
         self,
@@ -226,31 +218,24 @@ class ColmapDataWriter(Object):
 
         write_model(self.cameras, self.images, self.colmap_root, self.ext)
 
-    def write_transform2anchor_to_files(self, ext=".txt"):
+    def write_poses_in_metrics_space_to_file(self, ext=".txt"):
         """
-        @Brief: write transform2anchor data to files
+        @Brief: write self.poses_in_metrics_space data to files
         """
-        file_path = os.path.join(self.transform2anchor_root, "transform2anchor" + ext)
+        file_path = os.path.join(self.poses_in_metrics_space_root, "all_graph_poses_in_metrics_space" + ext)
         if ext == ".txt":
             with open(file_path, "w") as fid:
-                # Write header
-                line = "anchor_node_angle" + " " + self.transforms2anchor["anchor_node_angle"]
-                fid.write(line + "\n")
-                # Write relative transformations
-                for image_id, cvCam2anchor_T in self.transforms2anchor.items():
-                    if image_id == "anchor_node_angle":
-                        continue
-                    to_write = [image_id, *cvCam2anchor_T.flatten().tolist()]
+                # Write
+                for image_id, cvCam2W_T in self.poses_in_metrics_space.items():
+                    to_write = [image_id, *cvCam2W_T.flatten().tolist()]
                     line = " ".join([str(elem) for elem in to_write])
                     fid.write(line + "\n")
 
         elif ext == ".json":
-            for image_id, cvCam2anchor_T in self.transforms2anchor.items():
-                if image_id == "anchor_node_angle": # Header ("anchor_node_angle": image_id)
-                    continue
-                self.transforms2anchor[image_id] = cvCam2anchor_T.tolist()
+            for image_id, cvCam2W_T in self.poses_in_metrics_space.items():
+                self.poses_in_metrics_space[image_id] = cvCam2W_T.tolist()
             with open(file_path, "w") as fid:
-                json.dump(self.transforms2anchor, fid)
+                json.dump(self.poses_in_metrics_space, fid)
         else:
             raise (
                 f"[Error] Given extension {ext} is not supported. Only support .txt or .json"
