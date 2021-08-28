@@ -73,7 +73,7 @@ class ColmapDataWriter(Object):
         self.colmap_root = os.path.join(data_root, "map")
         self.ext = ext
 
-        # Root to the coordinate of poses in the metrics space. We store poses of all nodes in a scene's graph
+        # Root to the coordinate of camera poses (in OpenGL convention) in the metrics space. We store poses of all nodes in a scene's graph
         self.poses_in_metrics_space_root = os.path.join(data_root, "all_graph_poses_in_metrics_space")
         self.poses_in_metrics_space  = {}
 
@@ -110,9 +110,18 @@ class ColmapDataWriter(Object):
                     cvCam2world_T: np.ndarray,
                 ) -> None:
         """
-        @Brief: add a pose in the metrics space
+        @Brief: add a camera pose (in OpenGL convention) in the metrics space
+        @Args:
+            - image_id (str): id of the image (given in form of "nodeID_{}_angleID_{}")
+            - cvCam2world_T (np.ndarray): 4x4 matrix from camera coordinate to world coordinate
         """
-        self.poses_in_metrics_space[image_id] = cvCam2world_T
+        # Convert cvCam2world_T to glCam2world_T (OpenGL cam to world)
+        glCam2cvCam_T = np.array([[1, 0, 0, 0],
+                                  [0, -1, 0, 0],
+                                  [0, 0, -1, 0],
+                                  [0, 0, 0, 1]])
+        glCam2world_T = cvCam2world_T @ glCam2cvCam_T
+        self.poses_in_metrics_space[image_id] = glCam2world_T
 
     def _form_an_image(
         self,

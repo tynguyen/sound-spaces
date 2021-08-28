@@ -17,7 +17,7 @@ python scripts/get_correlation_two_audios.py
 ```
 
 - [x] Normalize recorded audio by 10. before saving to avoid clamping. Details: `soundpaces/simulator.py`
-- [x] Save the transformation from agent's camera frame to the world in the metrics space
+- [x] Save the transformation from agent's camera frame (in OpenGL convention) to the world in the metrics space
 
 ## Changed
 
